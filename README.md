@@ -75,3 +75,17 @@ Connect this GitHub repository in Render, choose **Blueprint**, and use `render.
 ## Current limits
 
 Photo upload deferred until live core integration passes. No subscriptions, bookings, events, workers, Redis, social or phone features. AI call count is a conservative project-wide cap, not token-cost accounting; no per-client rate limiter yet. Inquiry retries are deduplicated sequentially, but concurrent identical requests may return an error and should retry. Add edge rate limiting before opening the service to broad public traffic. Demo records and AI results require manual cleanup after rehearsal; automated retention is not implemented. Browser/device and concurrency/load validation remain outstanding.
+
+### Environment settings aliases and connection checks
+
+The backend accepts `VITE_SUPABASE_URL` as a fallback for `SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY` as a fallback for `SUPABASE_PUBLISHABLE_KEY`. These are read at runtime; a frontend rebuild is unnecessary. The canonical backend names take precedence. Neither database nor xAI credentials use a `VITE_` prefix.
+
+After settings have reached the running process:
+
+```sh
+python -m backend.check_connection
+python -m backend.migrate
+python -m backend.check_connection
+```
+
+The migration runner applies migrations atomically, serializes runners, records checksums, and skips already applied migrations. An existing manually created but untracked schema is refused for review rather than overwritten. The connection checker reports actual PostgreSQL connectivity and Supabase Auth settings access without printing configuration values; it does not claim owner login succeeded. Restart an existing server after changing environment settings.

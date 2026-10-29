@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 from .db import connect, execute
+from .config import supabase_config
 from .ai import call_ai, now
 
 app = FastAPI(title='FrontDesk AI feasibility demo')
@@ -36,7 +37,7 @@ def identity(request: Request):
     token = request.headers.get('authorization','')
     if not token.startswith('Bearer '):
         raise HTTPException(401, 'Sign in required')
-    url, key = os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_PUBLISHABLE_KEY')
+    url, key = supabase_config()
     if not url or not key:
         raise HTTPException(503, 'Authentication is not configured')
     # Supabase Auth validates the token, including expiry and project membership.
@@ -116,7 +117,8 @@ def health():
 
 @app.get('/api/config')
 def config():
-    return {'supabaseUrl':os.getenv('SUPABASE_URL',''),'supabaseKey':os.getenv('SUPABASE_PUBLISHABLE_KEY','')}
+    url, key = supabase_config()
+    return {'supabaseUrl':url,'supabaseKey':key}
 
 @app.get('/api/listings')
 def listings(m=Depends(identity)):
