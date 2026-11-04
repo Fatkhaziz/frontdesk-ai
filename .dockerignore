@@ -1,5 +1,7 @@
 .git
 .env
+.certs
+.DS_Store
 .venv
 **/node_modules
 **/__pycache__

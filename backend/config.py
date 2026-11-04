@@ -2,6 +2,17 @@
 import os
 
 
+def question_mode():
+    mode = os.getenv('QUESTION_MODE', 'demo')
+    if mode not in ('demo', 'ai'):
+        raise RuntimeError('QUESTION_MODE must be demo or ai')
+    return mode
+
+
+def ai_enabled():
+    return question_mode() == 'ai' and bool(os.getenv('XAI_API_KEY') and os.getenv('XAI_MODEL'))
+
+
 def supabase_config():
     url = os.getenv('SUPABASE_URL') or os.getenv('VITE_SUPABASE_URL', '')
     key = os.getenv('SUPABASE_PUBLISHABLE_KEY') or os.getenv('VITE_SUPABASE_PUBLISHABLE_KEY', '')

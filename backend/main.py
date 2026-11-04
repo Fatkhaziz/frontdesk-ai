@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+import traceback
 import uuid
 from pathlib import Path
 from typing import Literal
@@ -11,8 +12,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 from .db import connect, execute
-from .config import supabase_config
+from .config import supabase_config, question_mode, ai_enabled
 from .ai import call_ai, now
+from .demo import fields_for_question
+from .errors import error_category
 
 app = FastAPI(title='FrontDesk AI feasibility demo')
 log = logging.getLogger('frontdesk')
@@ -25,7 +28,11 @@ async def trace(request: Request, next_handler):
     start = time.monotonic()
     try:
         response = await next_handler(request)
-    except Exception:
+    except Exception as exc:
+        frames = traceback.extract_tb(exc.__traceback__)
+        origin = frames[-1].name if frames else 'unknown'
+        log.error('request_id=%s error_type=%s category=%s sqlstate=%s origin=%s',
+                  rid, type(exc).__name__, error_category(exc), getattr(exc, 'sqlstate', None), origin)
         response = JSONResponse({'detail':'Service unavailable; check configuration', 'request_id':rid}, status_code=503)
     response.headers['X-Request-ID'] = rid
     response.headers['Cache-Control'] = 'no-store'
@@ -118,7 +125,7 @@ def health():
 @app.get('/api/config')
 def config():
     url, key = supabase_config()
-    return {'supabaseUrl':url,'supabaseKey':key}
+    return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled()}
 
 @app.get('/api/listings')
 def listings(m=Depends(identity)):
@@ -151,6 +158,8 @@ def edit(lid:str,body:Edit,m=Depends(identity)):
 
 @app.post('/api/listings/{lid}/draft')
 def draft(lid:str,body:Revision,m=Depends(identity)):
+    if not ai_enabled():
+        raise HTTPException(503,'AI drafting is disabled. Enter a manual description, save, review and approve it.')
     with connect() as c: row = record(c,lid,m)
     if row['revision'] != body.expected_revision: raise HTTPException(409,'Stale revision')
     try:
@@ -188,17 +197,23 @@ def public(lid:str):
 @app.post('/api/public/{lid}/questions')
 def question(lid:str,body:Question):
     with connect() as c: row=record(c,lid,public=True)
-    fallback={'handoff':True,'answer':'I cannot answer that from the approved facts. You can submit an inquiry to staff.'}
-    try:
-        intent=call_ai(row['business_id'],'question',{'question':body.question})
-        if set(intent) != {'intent','fields'} or intent['intent'] != 'facts' or not isinstance(intent['fields'],list) or not intent['fields'] or any(f not in ('price','mileage') for f in intent['fields']): return fallback
-    except Exception:
-        return fallback
+    mode=question_mode()
+    fallback={'handoff':True,'answer':'I cannot answer that from the approved facts. You can submit an inquiry to staff.','mode':mode}
+    if mode == 'demo':
+        fields=fields_for_question(body.question)
+        if not fields: return fallback
+    else:
+        try:
+            intent=call_ai(row['business_id'],'question',{'question':body.question})
+            if set(intent) != {'intent','fields'} or intent['intent'] != 'facts' or not isinstance(intent['fields'],list) or not intent['fields'] or any(f not in ('price','mileage') for f in intent['fields']): return fallback
+            fields=intent['fields']
+        except Exception:
+            return fallback
     # Re-read after the network call; edits and publication may occur during inference.
     current=public(lid)
     facts=current['facts']
     answers={'price':f"The price is ${facts['price']/100:,.2f} USD.",'mileage':f"The mileage is {facts['mileage']:,} miles."}
-    return {'handoff':False,'answer':' '.join(answers[f] for f in dict.fromkeys(intent['fields'])),'revision':current['revision']}
+    return {'handoff':False,'answer':' '.join(answers[f] for f in dict.fromkeys(fields)),'revision':current['revision'],'mode':mode}
 
 @app.post('/api/public/{lid}/inquiries',status_code=201)
 def inquiry(lid:str,body:Inquiry):
@@ -228,7 +243,7 @@ def diagnostics(m=Depends(owner)):
     with connect() as c:
         execute(c,'SELECT 1').fetchone()
         last=execute(c,'SELECT model,kind,status,duration_ms,result,usage,created_at FROM ai_tasks WHERE business_id=%s ORDER BY created_at DESC LIMIT 1',(m['business_id'],)).fetchone()
-    return {'database':'connected','last_actual_ai_request':dict(last) if last else None}
+    return {'database':'connected','question_mode':question_mode(),'ai_enabled':ai_enabled(),'last_actual_ai_request':dict(last) if last else None}
 
 assets=Path(__file__).resolve().parent.parent/'frontend/dist'
 if (assets/'assets').exists(): app.mount('/assets',StaticFiles(directory=assets/'assets'),name='assets')
