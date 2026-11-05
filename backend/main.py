@@ -4,13 +4,15 @@ import os
 import time
 import traceback
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from .db import connect, execute
 from .config import supabase_config, question_mode, ai_enabled
 from .ai import call_ai, now
@@ -21,6 +23,10 @@ app = FastAPI(title='FrontDesk AI feasibility demo')
 log = logging.getLogger('frontdesk')
 logging.basicConfig(level=logging.INFO)
 logging.getLogger('httpx').setLevel(logging.WARNING)
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, exc):
+    return JSONResponse({'detail': 'Please check the required fields and enter valid vehicle details.'}, status_code=422)
 
 @app.middleware('http')
 async def trace(request: Request, next_handler):
@@ -73,10 +79,17 @@ class Strict(BaseModel):
 class Facts(Strict):
     make: str = Field(min_length=1,max_length=80)
     model: str = Field(min_length=1,max_length=80)
-    year: int = Field(ge=1886,le=2100)
+    year: int = Field(ge=1886,le=datetime.now().year + 1)
     price: int = Field(ge=0,le=1000000000,description='USD cents')
     mileage: int = Field(ge=0,le=10000000)
     availability: Literal['available','reserved','sold'] = 'available'
+
+    @field_validator('make', 'model')
+    @classmethod
+    def not_blank(cls, value):
+        if not value.strip():
+            raise ValueError('Enter a make and model')
+        return value.strip()
 
 class Car(Strict):
     facts: Facts
@@ -130,7 +143,7 @@ def config():
 @app.get('/api/listings')
 def listings(m=Depends(identity)):
     with connect() as c:
-        return [serialize(dict(r)) for r in execute(c,'SELECT * FROM listings WHERE business_id=%s ORDER BY id',(m['business_id'],)).fetchall()]
+        return [serialize(dict(r)) for r in execute(c,'SELECT l.*, (SELECT MAX(created_at) FROM audit_events a WHERE a.listing_id=l.id AND a.business_id=l.business_id) AS published_at FROM listings l WHERE business_id=%s ORDER BY id',(m['business_id'],)).fetchall()]
 
 @app.post('/api/listings',status_code=201)
 def create(body:Car,m=Depends(identity)):
@@ -163,12 +176,27 @@ def draft(lid:str,body:Revision,m=Depends(identity)):
     with connect() as c: row = record(c,lid,m)
     if row['revision'] != body.expected_revision: raise HTTPException(409,'Stale revision')
     try:
-        result = call_ai(m['business_id'],'draft',json.loads(row['facts']))
+        result = call_ai(m['business_id'],'draft',json.loads(row['facts']),lid)
         if set(result) != {'description'} or not isinstance(result['description'],str) or not result['description'].strip(): raise ValueError()
         body2 = Edit(facts=json.loads(row['facts']),description=result['description'],expected_revision=body.expected_revision)
     except Exception:
         raise HTTPException(503,'AI draft unavailable; existing draft preserved')
     return update_draft(lid,body2,m)
+
+@app.delete('/api/listings/{lid}')
+def delete_listing(lid: str, m=Depends(owner)):
+    with connect() as c:
+        # Serialize against publication and child inserts on the actual PostgreSQL parent.
+        suffix = '' if c.__class__.__module__.startswith('sqlite3') else ' FOR UPDATE'
+        row = execute(c, 'SELECT id FROM listings WHERE id=%s AND business_id=%s' + suffix, (lid,m['business_id'])).fetchone()
+        if not row:
+            raise HTTPException(404, 'Listing not found')
+        execute(c, 'DELETE FROM inquiries WHERE listing_id=%s AND business_id=%s', (lid,m['business_id']))
+        execute(c, 'DELETE FROM ai_tasks WHERE business_id=%s AND id IN (SELECT task_id FROM listing_ai_tasks WHERE listing_id=%s AND business_id=%s)', (m['business_id'],lid,m['business_id']))
+        execute(c, 'DELETE FROM audit_events WHERE listing_id=%s AND business_id=%s', (lid,m['business_id']))
+        # Revisions and the public snapshot are columns of this row, not separate tables.
+        execute(c, 'DELETE FROM listings WHERE id=%s AND business_id=%s', (lid,m['business_id']))
+    return {'deleted': True}
 
 @app.post('/api/listings/{lid}/publish')
 def publish(lid:str,body:Approval,m=Depends(owner)):
@@ -203,9 +231,14 @@ def question(lid:str,body:Question):
         fields=fields_for_question(body.question)
         if not fields: return fallback
     else:
+        # Narrow fall-demo scope: ambiguous or mixed input is always handed to staff.
+        # Grok still classifies supported questions, but cannot expand the allowed fields.
+        allowed=fields_for_question(body.question)
+        if not allowed: return fallback
         try:
-            intent=call_ai(row['business_id'],'question',{'question':body.question})
+            intent=call_ai(row['business_id'],'question',{'question':body.question},lid)
             if set(intent) != {'intent','fields'} or intent['intent'] != 'facts' or not isinstance(intent['fields'],list) or not intent['fields'] or any(f not in ('price','mileage') for f in intent['fields']): return fallback
+            if set(intent['fields']) != set(allowed): return fallback
             fields=intent['fields']
         except Exception:
             return fallback
@@ -229,7 +262,9 @@ def inquiry(lid:str,body:Inquiry):
 
 @app.get('/api/inquiries')
 def inbox(m=Depends(identity)):
-    with connect() as c: return [dict(r) for r in execute(c,'SELECT * FROM inquiries WHERE business_id=%s ORDER BY created_at DESC',(m['business_id'],)).fetchall()]
+    with connect() as c:
+        rows=execute(c,'SELECT i.*,l.facts FROM inquiries i JOIN listings l ON l.id=i.listing_id AND l.business_id=i.business_id WHERE i.business_id=%s ORDER BY i.created_at DESC,i.id DESC',(m['business_id'],)).fetchall()
+        return [{**dict(r),'vehicle_name': ' '.join(str(json.loads(r['facts'])[k]) for k in ('year','make','model'))} for r in rows]
 
 @app.patch('/api/inquiries/{iid}')
 def inquiry_status(iid:str,body:Status,m=Depends(identity)):
@@ -243,7 +278,16 @@ def diagnostics(m=Depends(owner)):
     with connect() as c:
         execute(c,'SELECT 1').fetchone()
         last=execute(c,'SELECT model,kind,status,duration_ms,result,usage,created_at FROM ai_tasks WHERE business_id=%s ORDER BY created_at DESC LIMIT 1',(m['business_id'],)).fetchone()
-    return {'database':'connected','question_mode':question_mode(),'ai_enabled':ai_enabled(),'last_actual_ai_request':dict(last) if last else None}
+        success=execute(c,"SELECT model,kind,usage,created_at FROM ai_tasks WHERE business_id=%s AND status='succeeded' ORDER BY created_at DESC LIMIT 1",(m['business_id'],)).fetchone()
+        draft_task=execute(c,"SELECT status FROM ai_tasks WHERE business_id=%s AND kind='draft' ORDER BY created_at DESC LIMIT 1",(m['business_id'],)).fetchone()
+        calls=execute(c,'SELECT calls FROM ai_budget WHERE id=1').fetchone()['calls']
+    # Reaching this owner route already required a successful Supabase Auth user check.
+    auth='ready'
+    limit=int(os.getenv('AI_CALL_LIMIT','100'))
+    return {'auth':auth,'database':'connected','backend':'running','question_mode':question_mode(),'ai_enabled':ai_enabled(),
+            'drafting': 'last request failed' if draft_task and draft_task['status']=='failed' else ('ready' if ai_enabled() and calls<limit else 'unavailable'),
+            'ai_calls_used':calls,'ai_call_limit':limit,'last_successful_ai_request':dict(success) if success else None,
+            'last_actual_ai_request':dict(last) if last else None}
 
 assets=Path(__file__).resolve().parent.parent/'frontend/dist'
 if (assets/'assets').exists(): app.mount('/assets',StaticFiles(directory=assets/'assets'),name='assets')

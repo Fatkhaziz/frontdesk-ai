@@ -1,65 +1,60 @@
-# Local dealership demo handoff
+# FrontDesk AI presentation handoff
 
-Verified November 4, 2026. Local URL: http://127.0.0.1:8000/.
+Verified November 5, 2026. Local app: http://127.0.0.1:8000/. Branch: `feat/feasibility-demo`. The server is detached; its credential-safe log is `/private/tmp/frontdesk-ai-local.log`. No spring features were added. Previous rehearsal notes are preserved in [the archive](archive/local-demo-handoff-before-dashboard.md).
 
-## Configuration and original failure
+## What is live
 
-The original `/api/diagnostics` and `/api/listings` requests returned HTTP 503 because libpq could not read the CA certificate. The absolute certificate path contains spaces; form-style URL encoding had converted spaces to `+`, which libpq treated literally. The local `.env` now uses `%20`, an absolute path under `.certs/`, and `sslmode=verify-full`. Credentials and the certificate remain local and are excluded from Git and Docker.
+Existing Supabase Auth and PostgreSQL configuration, verified TLS, Grok listing drafting, and Grok classification of supported customer questions. Local configuration uses `QUESTION_MODE=ai`, `DRAFT_AI_ENABLED=1`, `XAI_MODEL=grok-4.20-0309-non-reasoning`, and the preserved `AI_CALL_LIMIT=10`. Only supported price/mileage question phrasings reach Grok; mixed, ambiguous, availability, accident-history and other unsupported questions immediately offer staff handoff. The backend checks Grok's fields against the supported scope and constructs every answer from the published database snapshot. It never displays generated price or mileage prose as a customer answer.
 
-The original error was reproduced in an isolated read-only API process with the old encoding: both routes returned 503 and safe backend logs identified `OperationalError`, category `tls_ca_unreadable`, origin `connect`. Corrected configuration returned 200. No raw driver messages, credentials, or tokens were logged. New failures include a request ID, exception type, safe category, SQLSTATE and function name in backend logs.
+Exactly two paid requests were made during this final preparation: one draft and one classification. The persisted counter increased from 3 to 5; five attempts remain under the existing lifetime cap. Every request has a 200-token output limit and no automatic inference retry. This is a request cap, not a dollar-balance meter; no additional credit was purchased and no balance/top-up setting was changed. Automated tests and browser rehearsals mock AI.
 
-Run from the project directory after building:
+The final draft correctly returned “2022 Toyota Camry with 42,000 miles. Available now. $23,500 USD.” The live classification used 278 tokens and returned the allowed price/mileage fields; the answer was “The price is $23,500.00 USD. The mileage is 42,000 miles.” while the private draft price was $24,500. An unsupported question saved a synthetic inquiry, confirmed in the real inbox. The fixture was restored to $23,500 and unpublished; existing records were untouched.
 
-```sh
-npm run build --prefix frontend
-bash scripts/run-local.sh
-```
+## Presentation records
 
-The launcher loads the project `.env` regardless of the shell's starting directory. It verifies the absolute readable CA path, requires `verify-full`, and checks PostgreSQL before serving on loopback port 8000. Stop the existing server before launching another instance. Rebuild after frontend changes. Restart after changing `.env`.
+Keep **2022 Toyota Camry — published revision 7**, $23,500, 42,000 miles, availability available, published November 4 at 11:32:56 p.m. New York time:
 
-The delivered app was left running as a detached local process. Its credential-safe log is `/private/tmp/frontdesk-ai-local.log`.
+`6817e4f1-13b8-4fed-ae9b-1a0493ab96d2`
 
-## Demonstration behavior
+Public page: http://127.0.0.1:8000/listing/6817e4f1-13b8-4fed-ae9b-1a0493ab96d2
 
-`QUESTION_MODE=demo` is the default and is explicitly set in the local `.env`. The UI labels question matching as scripted and not AI. It answers a small set of exact price/mileage questions from the approved snapshot. Unknown or mixed questions offer staff handoff. Demo mode blocks both real AI question classification and description generation, even if xAI credentials are present. No paid API requests were made; the persisted AI call counter remained unchanged.
+The list selects this latest published Camry by default. Selection is remembered across refresh in this browser tab; sign-in must be repeated. Only the selected listing ID is stored in session storage, never the session token or vehicle data. The listing is fetched again from the API after sign-in.
 
-Descriptions can be entered manually or formatted from the entered vehicle facts. Saving produces a private draft. A business owner must review the saved revision and explicitly approve publication. Unsaved changes disable the approval checkbox and publish button. Public pages and answers use only the approved snapshot; edits remain private until a new approval. The existing live xAI behavior is available only after deliberately selecting `QUESTION_MODE=ai` and configuring the key/model.
+Delete these optional rehearsal copies through **Listings → select card → Listing management → Delete listing → confirm vehicle name**. None has been deleted automatically:
 
-## Checks actually passed
+| Record | How to identify it in the UI | Exact ID |
+| --- | --- | --- |
+| Older Camry rehearsal | Published, saved/public revision 3, “Duplicate / rehearsal copy”; description begins “Demo rehearsal vehicle.” | `c7bffa96-c7e3-4919-872d-be1935abca4b` |
+| Final verification fixture | Draft, saved revision 4, no public revision, “Duplicate / rehearsal copy”; its inbox item says “Final rehearsal: accident history?” | `484aa219-c744-4c82-af19-ae0aeeb4e5ce` |
 
-- Twelve isolated backend tests, using SQLite and injected Auth/AI: configuration, tenant isolation, role checks, private drafts, manual approval, stale revisions, AI failure behavior, inbox isolation/idempotency, demo behavior without AI calls, and safe correlated error logs.
-- TypeScript check and Vite production build.
-- Local PostgreSQL configuration: absolute readable CA, `sslmode=verify-full`, successful read, active TLS on the actual client-to-Supabase connection. The pooler's internal database hop is separate from this client TLS check.
-- Existing confirmed active owner membership for `demo-dealer` verified by a read-only query. No Auth users or credentials were changed.
-- Application-route rehearsal against real Supabase: diagnostics/listings/inbox 200; new Camry creation and retrieval with a separate connection; private draft protection; explicit manual approval; signed-out published read; hidden unpublished edits; stale approval rejection; republication; scripted questions; unknown-fact handoff; inquiry persistence, retry deduplication and staff status updates.
-- The authenticated route rehearsal used an injected owner identity only inside an isolated TestClient process. It did not bypass authentication on the running server or test password sign-in. Existing data was preserved; migrations were not repeated.
-- Running HTTP server: exact built HTML and JS/CSS with correct MIME types; runtime demo configuration; anonymous private API requests return 401; published facts and question/handoff endpoints work.
-- Real Chromium browser with no authenticated session: sign-in screen and demo disclosure render; Camry public page shows $23,500 and 42,000 miles; price/mileage questions answer correctly; accident history offers handoff; synthetic inquiry submitted through the UI is present in the real Supabase owner inbox; page reload preserves published facts; zero runtime errors.
+The existing 2020 Toyota Rav4 ($21,500, 22,000 miles, published r1, `4726dab6-4450-43c8-bcab-a7466779a20e`) and 2026 BMW M2 ($62,000, 3,000 miles, draft r2, `42301746-3adf-4eb6-8304-8db9e6fad8f5`) are distinct vehicles, not proven duplicates. They were preserved; the incomplete BMW can be removed manually if you do not want it shown.
 
-Retained rehearsal listing:
+## Exact Safari walkthrough
 
-http://127.0.0.1:8000/listing/c7bffa96-c7e3-4919-872d-be1935abca4b
+1. Open the local home page and sign in with your existing verified owner account. **Listings** opens with the latest published Camry, unless this tab remembers another selection. Select the card marked **Latest published copy**, saved/public r7. Confirm the dollar price is `23500`.
+2. In **1 Vehicle details**, review the structured facts. Click **Save vehicle details** to move to **2 AI description**. Click **Generate with Grok** only once if demonstrating a new paid call; wait for the success notice. You can edit the description, then click **Save description**. That saves privately and opens **3 Review and publish**.
+3. Read the saved facts and description in the review panel. Tick **I reviewed the saved revision and approve these facts and description.** Click **Publish approved revision**, then **View public page ↗**. The generated description was never automatically public.
+4. In the public tab, enter `Price and mileage?` and click **Ask question** once (one paid classification). Confirm $23,500 and 42,000 miles. Enter `Accident history?`, click **Ask question** (unsupported: no paid call), enter a synthetic contact such as `presentation@example.invalid`, then click **Send inquiry to staff**. Confirm the staff-inbox success message.
+5. Return to the owner tab. Click **Inquiries → Refresh inquiries**. Find the Camry question and contact, then change **Status** to **Pending**. The newest inquiry is first.
+6. Click **Listings**, select the presentation Camry, then **1 Vehicle details**. Change price to `24500` and click **Save vehicle details**. Refresh the public page: it must still show $23,500. In **2 AI description**, manually update the price in the wording, then **Save description → review checkbox → Publish approved revision**. Refresh the public page: it now shows $24,500. Restore `23500`, fix the wording, save/review/publish again if you want the starting state back. No Grok regeneration is required for this part.
+7. Click **System status → Refresh status**. Show Auth ready, database connected, drafting ready, Live AI, backend running, used/limit, and the last successful model/token count/time. Expand **Technical API diagnostics** only if asked: provider response ID and usage demonstrate a real provider response. Status checks do not spend credits.
+8. For a persistence check, refresh the owner page, sign in again, and confirm the selected listing and saved data return. Unsaved edits are intentionally discarded on reload. On a narrow Safari window, the vehicle cards scroll horizontally and the stage buttons remain visible.
 
-It is a 2022 Toyota Camry at $23,500 with 42,000 miles, available, published revision 3. The manual description identifies it as a demo rehearsal vehicle. Two synthetic inquiries were retained: an API rehearsal inquiry marked pending and a browser-submitted accident-history inquiry marked open. Existing vehicles and inquiries were not modified.
+If you prefer zero additional spending during the talk, use the saved approved description and show System status's existing live-request evidence. Avoid Generate/Ask on supported questions; accident-history handoff remains free. At five used calls, the full optional paid sequence above leaves three attempts available.
 
-## Remaining private browser check and presentation
+## Verification completed
 
-1. At the local home page, enter your existing demo owner email/password privately in the website. Click **Owner diagnostics** (expect connected, demo mode and AI disabled), then **Reload saved records** (expect no error). This real owner login and dashboard check still needs your credentials; Safari has not been automated.
-2. Click **New car**. Defaults are 2022 Toyota Camry, price `2350000` cents and mileage `42000`. Click **Fill manual description from current facts**, then **Save draft**. Expand **Review saved database record**. Refresh, sign in again, and reopen that saved draft to prove persistence. A matching Camry was already rehearsed and retained if you prefer to inspect it first.
-3. Review the saved facts/description, tick approval and publish. Open **Open public listing** in a private window. Show the approved price/mileage and the explicit demo-mode banner.
-4. In the owner tab, change price to `2450000`, update the manual description and save. Refresh the private public window: it must still show $23,500. Approve and republish; refresh again to show $24,500. Restore $23,500 and republish if desired.
-5. In the private window ask **Price?**, **Mileage?**, and **Accident history?**. Explain that question matching and description formatting are scripted, not Grok. Submit synthetic contact information such as `presentation@example.invalid`. In the owner tab, click **Reload saved records**, show the staff inquiry inbox, and mark the inquiry pending.
+- 21 backend unittest cases passed, including tenant/staff/anonymous authorization, delete not-found and related cleanup, transaction rollback, friendly validation, AI failure, saved/public snapshot separation, inquiry persistence/idempotency/order, and 20 unsupported/mixed/hostile questions denied without provider calls. SQLite foreign keys are enabled in tests.
+- Three frontend Node tests passed: exact dollar-to-cents conversion/rejection, invalid facts, latest-published selection and ordering.
+- TypeScript check and Vite production build passed. There is no existing separate lint/format script. `git diff --check` passed.
+- Isolated Chromium desktop and 390px mobile rehearsal passed: mocked sign-in; default listing; friendly blank-make validation; cents conversion; refresh/re-login; mocked Grok/edit/save/approve; public snapshot isolation; chat/handoff/inquiry; inbox status; delete cancel/confirm/cleanup; no horizontal page overflow; zero browser runtime errors. The script never loads `.env` and uses isolated SQLite records and mocked Auth/AI. Run `PYTHONPATH=. python scripts/check-browser.py` with Playwright/Chromium installed, after building. In this session the existing tools were supplied through temporary PYTHONPATH and PLAYWRIGHT_BROWSERS_PATH locations.
+- Real Supabase migration 002 applied after the unchanged tracked migration 001. Real app-route verification passed draft generation, explicit publication, private-price isolation, live classification, handoff/inquiry persistence, and restoration to an unpublished fixture. This used an owner identity injected only in an isolated TestClient process. The running server retains normal Supabase Auth; no authentication bypass was added to production.
+- Secrets and certificate material are ignored and excluded from the commit. Actual Safari/password login remains the owner's private check; the browser rehearsal used mocked credentials.
 
-## Review state
+## Delete semantics and limits
 
-Work remains uncommitted on `feat/feasibility-demo`. Changes are limited to local startup/error diagnostics, demo-mode configuration and matching, the existing dealership UI, tests, and setup/handoff documentation. No schema changes or paid API calls were needed. Local `.env`, `.certs/`, virtual environment, node modules, built assets, and temporary browser tools are excluded from the proposed source changes. Private owner sign-in remains the final user check before claiming the whole workflow passed in Safari.
+One transaction locks the tenant's listing, deletes its inquiries, deletes linked AI tasks (and cascade link records), deletes associated publication audit entries, and deletes the listing row containing saved revision/approval/public snapshot. Any failure rolls everything back. The project-wide AI attempt count is never refunded. Tests perform deletion only on isolated records; no existing Supabase record was deleted.
 
-| Changed files | Purpose |
-| --- | --- |
-| `backend/local.py`, `scripts/run-local.sh` | Load local settings consistently, validate TLS/CA, check connectivity and start on loopback. |
-| `backend/errors.py`, `backend/main.py` | Safe correlated error logs, runtime mode reporting, guarded AI paths and approved-snapshot demo answers. |
-| `backend/config.py`, `backend/demo.py`, `.env.example` | Explicit demo/live mode and deterministic supported-question matching. |
-| `frontend/src/main.tsx`, `frontend/src/style.css` | Demo disclosure, manual descriptions, safe approval state, identifiable saved cars and staff handoff UI. |
-| `tests/test_workflow.py` | Demo/no-paid-call, manual approval/privacy and safe-error regression coverage. |
-| `.gitignore`, `.dockerignore` | Exclude the local CA directory as well as existing credential exclusions. |
-| `README.md`, `docs/local-demo-handoff.md` | Current local setup, presentation sequence, evidence and remaining personal checks. |
+Migration 002 adds a backend-only link table so new AI requests can be removed with their listing. Older AI tasks had no listing reference and cannot safely be retroactively assigned, especially after descriptions were edited. Those unlinked legacy business-level logs are preserved, rather than guessing and deleting another listing's history. This limitation does not leave an accessible public page or inquiry after deletion.
+
+The app remains a narrow loopback feasibility demo: no photos, spring booking/billing, open-ended chat, automatic staff notifications, or automatic retention. Customer Q&A supports a deliberately bounded set of price/mileage phrasings. Owner content review is still required. Real Safari login/keyboard interaction should be checked with the walkthrough above; Chromium automation is not a Safari compatibility claim.

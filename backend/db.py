@@ -11,6 +11,7 @@ def connect():
         import sqlite3
         c = sqlite3.connect(url[10:])
         c.row_factory = sqlite3.Row
+        c.execute('PRAGMA foreign_keys=ON')
     else:
         import psycopg
         from psycopg.rows import dict_row

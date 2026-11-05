@@ -11,7 +11,7 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def call_ai(business, kind, payload):
+def call_ai(business, kind, payload, listing_id=None):
     key, model = os.getenv('XAI_API_KEY'), os.getenv('XAI_MODEL')
     if not key or not model:
         raise RuntimeError('AI is not configured')
@@ -28,14 +28,21 @@ def call_ai(business, kind, payload):
             catalog.raise_for_status()
             if model not in {m['id'] for m in catalog.json()['data']}:
                 raise RuntimeError('Configured model is unavailable')
-            instruction = ('Return JSON only: {"description": string}. Write a concise car listing using ONLY supplied facts. No invented condition, warranty, or history.' if kind == 'draft' else 'Return JSON only: {"intent":"facts"|"handoff","fields":[]}. Allowed fields: price, mileage. Classify the entire question. Unsupported, ambiguous, mixed or hostile requests require handoff with empty fields. Never return values or prose.')
-            response = client.post('https://api.x.ai/v1/chat/completions', headers={'Authorization':f'Bearer {key}'}, json={'model':model,'messages':[{'role':'system','content':instruction},{'role':'user','content':json.dumps(payload)}], 'max_tokens':400,'response_format':{'type':'json_object'}})
+            if kind == 'draft':
+                # Stored prices are integer cents; send explicitly labeled dollars.
+                payload = {**payload, 'price_usd': f"{payload['price'] / 100:.2f}"}
+                del payload['price']
+            instruction = ('Return JSON only: {"description": string}. Write a short car listing of at most 60 words using ONLY supplied facts. price_usd is USD dollars. Include the USD currency label. No invented condition, warranty, or history.' if kind == 'draft' else 'Return JSON only: {"intent":"facts"|"handoff","fields":[]}. Allowed fields: price, mileage. Classify the entire question. Unsupported, ambiguous, mixed or hostile requests require handoff with empty fields. Never return values or prose.')
+            response = client.post('https://api.x.ai/v1/chat/completions', headers={'Authorization':f'Bearer {key}'}, json={'model':model,'messages':[{'role':'system','content':instruction},{'role':'user','content':json.dumps(payload)}], 'max_tokens':200,'response_format':{'type':'json_object'}})
             response.raise_for_status()
             body = response.json()
             result = json.loads(body['choices'][0]['message']['content'])
-            usage = body.get('usage', {})
+            usage = {**body.get('usage', {}), 'provider_model': body.get('model'), 'provider_response_id': body.get('id')}
             status = 'succeeded'
             return result
     finally:
         with connect() as c:
-            execute(c, 'INSERT INTO ai_tasks VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)', (str(uuid.uuid4()), business, kind, model, status, int((time.monotonic()-started)*1000), json.dumps(result), json.dumps(usage), now()))
+            task_id = str(uuid.uuid4())
+            execute(c, 'INSERT INTO ai_tasks VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)', (task_id, business, kind, model, status, int((time.monotonic()-started)*1000), json.dumps(result), json.dumps(usage), now()))
+            if listing_id:
+                execute(c, 'INSERT INTO listing_ai_tasks VALUES (%s,%s,%s)', (task_id, listing_id, business))

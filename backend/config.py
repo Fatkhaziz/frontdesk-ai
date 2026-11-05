@@ -10,7 +10,8 @@ def question_mode():
 
 
 def ai_enabled():
-    return question_mode() == 'ai' and bool(os.getenv('XAI_API_KEY') and os.getenv('XAI_MODEL'))
+    enabled = os.getenv('DRAFT_AI_ENABLED', '1' if question_mode() == 'ai' else '0') == '1'
+    return enabled and bool(os.getenv('XAI_API_KEY') and os.getenv('XAI_MODEL'))
 
 
 def supabase_config():

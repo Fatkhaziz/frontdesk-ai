@@ -1,37 +1,38 @@
-# FrontDesk AI — feasibility demo
+# FrontDesk AI — fall dealership feasibility demo
 
-Presentation: November 5, 2026; backup November 12. React/TypeScript and FastAPI run as **one Render web service**. Supabase supplies PostgreSQL and Auth. xAI calls run exclusively on the backend. Baseline documents are in [docs](docs/).
+React/TypeScript and FastAPI serve one application; Supabase provides PostgreSQL and Auth, and xAI provides server-side Grok drafting and bounded question classification. This demo covers structured vehicle facts → private AI draft → owner approval of a saved revision → public listing → approved-fact answers → staff inquiry handoff. Spring bookings, events, billing, photos, and other extensions are outside this preparation.
 
-For the current no-Grok demo, actual verification results and the remaining private browser checklist are in [the local demo handoff](docs/local-demo-handoff.md).
+See [the presentation handoff](docs/local-demo-handoff.md) for exact Safari clicks, live verification results, retained records and duplicate cleanup. Original requirements/design documents remain in [docs](docs/).
 
-## Configure securely
+## Local configuration
 
-Copy `.env.example` to `.env` locally, or set these names in Render's environment settings. Never commit `.env`.
+Use a local `.env` copied from `.env.example`; never commit credentials. `.env`, `.certs/`, `.venv/`, `frontend/node_modules/`, and `frontend/dist/` are ignored. Runtime configuration exposes only the Supabase public URL/key to the browser.
 
-| Name | Setup action |
+| Setting | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Supabase Connect → session pooler PostgreSQL URL, including password. Use TLS certificate verification (`sslmode=verify-full`). Percent-encode password characters. |
-| `SUPABASE_URL` | Project HTTPS URL. |
-| `SUPABASE_PUBLISHABLE_KEY` | Project publishable key (legacy anon key also works). **Never use service_role or secret key here**: this key is intentionally returned to the browser. |
-| `XAI_API_KEY` | Create an xAI API key with funded API access. Backend only. |
-| `XAI_MODEL` | An exact ID from authenticated `GET https://api.x.ai/v1/models`. No default is assumed; every AI operation validates catalog membership before inference. |
-| `AI_CALL_LIMIT` | Default 100; hard lifetime project call cap, including failures. Increase deliberately after reviewing usage. |
-| `QUESTION_MODE` | Default `demo`: fixed price/mileage question matching, manual descriptions, no AI requests. Set `ai` deliberately to enable the real xAI paths. |
+| `DATABASE_URL` | Supabase session-pooler PostgreSQL URL with `sslmode=verify-full` and an absolute readable `sslrootcert` path. Percent-encode path spaces as `%20`, not `+`. Keep the CA in ignored `.certs/`. |
+| `SUPABASE_URL` | Project HTTPS URL. `VITE_SUPABASE_URL` is accepted as a fallback. |
+| `SUPABASE_PUBLISHABLE_KEY` | Public publishable or legacy anon key. Never a service-role/secret key. `VITE_SUPABASE_PUBLISHABLE_KEY` is a fallback. |
+| `XAI_API_KEY` | Backend-only funded xAI key. |
+| `XAI_MODEL` | Exact text-model ID in the account's authenticated `GET /v1/models` catalog. Checked before inference. |
+| `QUESTION_MODE` | `demo`: honestly labeled Scripted fallback; `ai`: Grok classifies supported price/mileage questions. Unknown/mixed questions always offer handoff. |
+| `DRAFT_AI_ENABLED` | `1` enables paid listing drafts, `0` disables them. If omitted, follows question mode. |
+| `AI_CALL_LIMIT` | Hard project-wide lifetime attempt cap, including failed attempts. Local demo: 10. Not a dollar-balance meter. |
 
-For this cloud's restricted network, allow `api.x.ai`, your exact `PROJECT.supabase.co` Auth host, and your Supabase database/pooler host (TCP 5432). Preserve existing package/GitHub access. Do not put credential values in chat.
+Do not place xAI/database secrets in a `VITE_` variable. The verified local model is `grok-4.20-0309-non-reasoning`. Each inference has a 200-token output cap and no automatic retry. Only vehicle facts or a supported question are sent to xAI; inquiry contacts are never sent.
 
-## Supabase preparation
+## Database setup
 
-1. Create a project and enable email/password Auth. Create and confirm a test owner in the Auth dashboard; copy its user UUID.
-2. Run `migrations/001_demo.sql` once in the Supabase SQL editor (or `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/001_demo.sql`). Tables are backend-only; browser roles have no grants.
-3. Provision a membership with the actual Auth UUID, using parameterized administration or the SQL editor:
+A confirmed Supabase email/password user must already have an active owner/staff membership. No public business creation or role-management endpoint exists in this bounded demo. Only an owner can publish, unpublish, delete, or view system diagnostics. Staff can prepare drafts and handle inquiries. All private routes verify Supabase identity and business membership.
 
-```sql
-INSERT INTO businesses(id,name) VALUES ('demo-dealer','Demo Motors');
-INSERT INTO memberships(subject,business_id,role) VALUES ('ACTUAL-AUTH-USER-UUID','demo-dealer','owner');
+For a new database, load the environment privately and run:
+
+```sh
+python -m backend.migrate
+python -m backend.check_connection
 ```
 
-Create another business/user to verify isolation. Staff membership may read/edit drafts and handle inbox items; only owners publish or see diagnostics. No open business-registration endpoint exists in this narrow demo.
+Migrations are atomic, serialized, and checksum-tracked. An existing manually created untracked schema is refused for review; do not recreate/reset it. `001_demo.sql` defines the existing data; additive `002_listing_ai_tasks.sql` links new AI requests to listings for safe deletion. Both are already applied in the current Supabase demo. Provision the business/membership using parameterized administration or the Supabase SQL editor with the actual confirmed Auth UUID. Browser database roles have no application-table grants.
 
 ## Build and run
 
@@ -46,50 +47,37 @@ npm run build --prefix frontend
 bash scripts/run-local.sh
 ```
 
-The local launcher changes to the project folder, loads its `.env`, requires an absolute readable `sslrootcert` and `sslmode=verify-full`, and performs a read-only PostgreSQL preflight. Keep the Supabase CA in `.certs/prod-ca-2021.crt` locally; `.certs/` and `.env` are ignored by Git and Docker. In the database URL, encode path spaces as `%20`, never `+` (libpq treats plus signs literally). Quote the complete URL in `.env`. Stop the old server before restarting the launcher. Build the frontend before starting so the static asset route is registered.
+The launcher loads the project's `.env`, verifies the CA path and TLS mode, checks PostgreSQL, then serves http://127.0.0.1:8000/. Stop the existing server before restarting. Rebuild after frontend changes; restart after backend/environment changes. The current demo is left running detached, with safe logs at `/private/tmp/frontdesk-ai-local.log`.
 
-Open http://127.0.0.1:8000/. `/docs` exposes FastAPI contracts; `/health` is process health, **not** proof of database/AI readiness. Owner diagnostics executes `SELECT 1`, reports the question mode, and shows the latest actual AI task. It reports null before any actual call. The saved-record panel is a fresh API database read, not browser storage. Supabase SQL editor can independently show `SELECT * FROM listings;`.
+## Interface and publication
 
-In `QUESTION_MODE=demo`, both public Q&A and description drafting are prevented from calling xAI even if a key is present. The banner and public assistant identify scripted behavior. Supported questions include `Price?`, `Mileage?`, and `Price and mileage?`; unrecognized or mixed questions offer staff handoff. Answers always use the approved snapshot. `Fill manual description from current facts` formats only the entered facts; save it, review the saved record, check approval, and publish as an owner. Unsaved changes disable approval. Grok drafting remains disabled until `QUESTION_MODE=ai` and a key/model are configured.
+The owner dashboard defaults to **Listings**, with separate **Inquiries** and **System status** sections. Latest published vehicles sort first; the latest published 2022 Toyota Camry is the default selection. Duplicate vehicle names are labeled for review; nothing is automatically deleted. Selection is remembered within the browser tab using only the listing ID. Auth tokens stay in memory; reloading requires sign-in and fetches records again.
 
-Only public Supabase configuration comes from `/api/config` at runtime, so Render needs no Vite build-time secrets or environment arguments. Tokens stay in memory; reload requires sign-in again and retrieves saved database records. Sign out/re-sign in after token expiration.
+The editor has three switchable stages: **Vehicle details**, **AI description**, **Review and publish**. Prices are entered in dollars and converted to integer cents only when building the API payload. Client and server validation reject invalid facts with friendly messages. Grok and the non-AI formatter are distinctly labeled. Generated text remains private and editable. Only explicit owner approval of the exact saved revision permits publication. Unsaved/private edits cannot change the public snapshot. A prominent **View public page** button follows publication; unpublish/delete are separate management actions.
 
-## Tests
+Public listings show approved facts and description, conversation-style Q&A, and voluntary staff handoff. Supported questions include `Price?`, `Mileage?`, `Price and mileage?`, `What is the price?`, and `How many miles does it have?`. In live mode, Grok's field classification must agree with the bounded scope; FastAPI re-reads the published snapshot and builds the final price/mileage answer. Unsupported/mixed/ambiguous inputs, invalid AI output, and provider failures offer handoff. Availability and accident history are outside customer Q&A scope. Successful inquiry submission means saved in the staff inbox; no email/phone notification is claimed.
+
+**System status** shows validated Auth, database readiness, drafting state, question mode, used/limit, backend health, and last successful model/token usage/time. Detailed diagnostics are collapsed and owner-only. `/health` is process health only; `/docs` describes the API.
+
+## Safe listing deletion
+
+`DELETE /api/listings/{id}` requires owner membership in the listing's business. A single database transaction locks the parent and removes inquiries, linked AI tasks, publication audit entries, and the listing row (including saved revision, approval and public snapshot). Foreign keys enforce relationships; any failure rolls back. The lifetime AI counter remains unchanged. Legacy AI tasks predating migration 002 have no provable listing link and are retained as business-level logs. No current demo record has been automatically deleted. The UI confirms the vehicle name before deletion.
+
+## Checks
 
 ```sh
 python -m unittest discover -s tests -v
+npm test --prefix frontend
 npm run build --prefix frontend
+git diff --check
 ```
 
-Twelve isolated tests exercise configuration, persistence, tenant/role denial, manual approval, stale approval, late AI output, approved-value answers, inquiry storage/idempotency, safe error logging, and demo mode without AI calls. SQLite and injected authentication/AI are explicitly **test doubles**, not Supabase/xAI integration proof. Production requires PostgreSQL; SQLite is enabled only with `TESTING=1`.
+21 backend tests use isolated SQLite with foreign keys enabled and injected Auth/AI. Three frontend tests check dollars/cents, validation, selection and ordering. No lint/format script existed; the build includes strict TypeScript checks. Optional `scripts/check-browser.py` uses Playwright/Chromium, a temporary SQLite database and mocked Auth/Grok on loopback port 8001 to rehearse the full owner/public/delete workflow at desktop/mobile sizes. Install browser tooling outside the repository's tracked artifacts; run with the project root on `PYTHONPATH`. Automated tests never load `.env` or call paid xAI.
 
-## Deploy
+These mocks are not real integration evidence. The handoff records the separate two-request live verification and its authentication limitations. Real Safari sign-in must use the owner's credentials privately.
 
-Connect this GitHub repository in Render, choose **Blueprint**, and use `render.yaml`. This builds the frontend into the Python image and starts one Docker web service, with no Render database. Supply all secure settings above. Apply the migration before rehearsal. After deployment verify login, diagnostics, persistence across reload, actual Grok draft and both customer paths. Record the Render URL and actual results. Do not claim a live integration from unit tests.
+## Deployment and limits
 
-## Five-minute professor walkthrough
+The existing Docker/Render configuration serves the built frontend and backend as one web service. Supply secure runtime settings, apply migrations before starting updated code, and verify the hosted flow before claiming deployment. This task leaves the local app running and pushes source; it does not deploy to Render.
 
-- 0:00–0:40: Sign in as confirmed owner. Click Owner diagnostics and Reload saved records. Explain Supabase data/Auth and the clearly labeled scripted demo mode; Grok is not configured or called.
-- 0:40–1:20: Save a 2022 Camry, 42,000 miles, price 2,350,000 cents. Reload, sign in again, select the saved car; expand the saved database record.
-- 1:20–2:05: Use the manual description formatter, save, review the **saved revision**, check approval, publish. No AI-generated text is claimed.
-- 2:05–3:00: Open the public listing in a private browser window. Ask `Price?` and `Mileage?`. Show answers match published data. Ask `Accident history?`, submit voluntary test contact details, reload the owner inbox, and mark the inquiry pending.
-- 3:00–4:10: Change price to 2,450,000 cents and save. Public page still shows the prior approved price. Approve/publish the new revision, reload public page, ask again. Demonstrate stale revision rejection through `/docs` with an old `expected_revision`.
-- 4:10–5:00: Show diagnostics' actual database status, demo mode, disabled AI, and request-ID logs. Summarize test evidence and the remaining real-AI integration work.
-
-## Current limits
-
-Photo upload deferred until live core integration passes. No subscriptions, bookings, events, workers, Redis, social or phone features. AI call count is a conservative project-wide cap, not token-cost accounting; no per-client rate limiter yet. Inquiry retries are deduplicated sequentially, but concurrent identical requests may return an error and should retry. Add edge rate limiting before opening the service to broad public traffic. Demo records and AI results require manual cleanup after rehearsal; automated retention is not implemented. Browser/device and concurrency/load validation remain outstanding.
-
-### Environment settings aliases and connection checks
-
-The backend accepts `VITE_SUPABASE_URL` as a fallback for `SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY` as a fallback for `SUPABASE_PUBLISHABLE_KEY`. These are read at runtime; a frontend rebuild is unnecessary. The canonical backend names take precedence. Neither database nor xAI credentials use a `VITE_` prefix.
-
-After settings have reached the running process:
-
-```sh
-python -m backend.check_connection
-python -m backend.migrate
-python -m backend.check_connection
-```
-
-The migration runner applies migrations atomically, serializes runners, records checksums, and skips already applied migrations. An existing manually created but untracked schema is refused for review rather than overwritten. The connection checker reports actual PostgreSQL connectivity and Supabase Auth settings access without printing configuration values; it does not claim owner login succeeded. Restart an existing server after changing environment settings.
+This is a bounded demo, not an open public service. It has a project attempt cap rather than full token-cost accounting or per-client rate limiting. Keep it on loopback for presentation. Retention jobs, load testing, user trials, real Safari automation, photos, and spring features remain outside this preparation. The [handoff](docs/local-demo-handoff.md) distinguishes completed checks from those limits.
