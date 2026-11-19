@@ -1,6 +1,6 @@
 # Professors feedback implementation handoff
 
-The November 19 requirements and design are the revised specification. The code at d73c2c4896967e3d913116567fa9b7504d350c31 remains the dealership feasibility demo. The changes in this review align the written scope and acceptance tests with the professors' annotated feedback.
+The November 19 requirements and design are the revised specification. The code at d73c2c4896967e3d913116567fa9b7504d350c31 remains the dealership feasibility demo. The written scope and acceptance tests align with the professors' annotated feedback. The subsequent fall implementation adds shared business configuration and service inquiries; see [fall progress](fall-progress.md) for executed checks and remaining live verification. The baseline evidence below describes the earlier vehicle demo.
 
 ## Current evidence
 
@@ -10,7 +10,7 @@ The November 19 requirements and design are the revised specification. The code 
 - Customer questions support price and mileage. Unknown questions offer a saved inquiry. There are no voice, appointment, general business configuration or administration routes.
 - Existing test results in docs/local-demo-handoff.md are historical. This documentation revision does not rerun or certify live integrations.
 
-## Immediate fall continuation
+## Original fall continuation plan
 
 1. Work from feat/feasibility-demo and preserve uncommitted local work. Use a feature branch. Read AGENTS.md and the revised requirements/design.
 2. Add atomic, checksum-tracked migrations for business domain/slug/status, departments, service definitions, intake schema revisions and approved knowledge. Preserve original rows and published snapshots. Do not edit already-applied migration checksums.

@@ -21,6 +21,7 @@ export type Config = {
     supabaseKey: string;
     questionMode: 'demo' | 'ai';
     aiEnabled: boolean;
+    rehearsal?: boolean;
 };
 export type Api = (path: string, method?: string, body?: unknown) => Promise<any>;
 export type Run = (fn: () => Promise<void>) => Promise<void>;

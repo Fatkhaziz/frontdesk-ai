@@ -18,6 +18,7 @@ class Workflow(unittest.TestCase):
    sql=Path('migrations/001_demo.sql').read_text().split('-- Application data')[0]+'COMMIT;'
    c.executescript(sql)
    c.executescript(Path('migrations/002_listing_ai_tasks.sql').read_text().split('REVOKE')[0]+'COMMIT;')
+   c.executescript(Path('migrations/003_business_reception.sql').read_text().split('REVOKE')[0]+'COMMIT;')
    for b in ['a','b']: execute(c,'INSERT INTO businesses VALUES(%s,%s)',(b,b))
   self.member={'subject':'owner-a','business_id':'a','role':'owner'}
   app.dependency_overrides[identity]=lambda:self.member
