@@ -1,4 +1,8 @@
-# FrontDesk AI — fall dealership feasibility demo
+# FrontDesk AI
+
+FrontDesk AI is an AI receptionist platform for small businesses. The [November 19 requirements](docs/requirements.md) and [aligned detailed design](docs/detailed-design.md) address the professors' annotated feedback, including multiple business domains, business-specific rules, four roles and dealership operations. [Implementation work and evidence](docs/professor-feedback-implementation.md) describe the gaps between that specification and the current code. Earlier Word/PDF snapshots in this folder are historical design references.
+
+## Fall dealership feasibility demo
 
 React/TypeScript and FastAPI serve one application; Supabase provides PostgreSQL and Auth, and xAI provides server-side Grok drafting and bounded question classification. This demo covers structured vehicle facts → private AI draft → owner approval of a saved revision → public listing → approved-fact answers → staff inquiry handoff. Spring bookings, events, billing, photos, and other extensions are outside this preparation.
 
