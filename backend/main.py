@@ -18,6 +18,7 @@ from .config import supabase_config, question_mode, ai_enabled
 from .ai import call_ai, now
 from .demo import fields_for_question
 from .errors import error_category
+from .business import create_router, format_inquiry
 
 app = FastAPI(title='FrontDesk AI feasibility demo')
 log = logging.getLogger('frontdesk')
@@ -26,7 +27,7 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request, exc):
-    return JSONResponse({'detail': 'Please check the required fields and enter valid vehicle details.'}, status_code=422)
+    return JSONResponse({'detail': 'Please check the required fields and enter valid details.'}, status_code=422)
 
 @app.middleware('http')
 async def trace(request: Request, next_handler):
@@ -72,6 +73,8 @@ def owner(member=Depends(identity)):
     if member['role'] != 'owner':
         raise HTTPException(403, 'Owner required')
     return member
+
+app.include_router(create_router(identity, owner))
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -138,7 +141,7 @@ def health():
 @app.get('/api/config')
 def config():
     url, key = supabase_config()
-    return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled()}
+    return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled(), 'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'}
 
 @app.get('/api/listings')
 def listings(m=Depends(identity)):
@@ -264,7 +267,9 @@ def inquiry(lid:str,body:Inquiry):
 def inbox(m=Depends(identity)):
     with connect() as c:
         rows=execute(c,'SELECT i.*,l.facts FROM inquiries i JOIN listings l ON l.id=i.listing_id AND l.business_id=i.business_id WHERE i.business_id=%s ORDER BY i.created_at DESC,i.id DESC',(m['business_id'],)).fetchall()
-        return [{**dict(r),'vehicle_name': ' '.join(str(json.loads(r['facts'])[k]) for k in ('year','make','model'))} for r in rows]
+        vehicles = [{**dict(r),'kind':'listing','vehicle_name': ' '.join(str(json.loads(r['facts'])[k]) for k in ('year','make','model'))} for r in rows]
+        services = [format_inquiry(r) for r in execute(c, 'SELECT * FROM business_inquiries WHERE business_id=%s', (m['business_id'],)).fetchall()]
+        return sorted(vehicles + services, key=lambda row: (row['created_at'], row['id']), reverse=True)
 
 @app.patch('/api/inquiries/{iid}')
 def inquiry_status(iid:str,body:Status,m=Depends(identity)):
@@ -282,9 +287,10 @@ def diagnostics(m=Depends(owner)):
         draft_task=execute(c,"SELECT status FROM ai_tasks WHERE business_id=%s AND kind='draft' ORDER BY created_at DESC LIMIT 1",(m['business_id'],)).fetchone()
         calls=execute(c,'SELECT calls FROM ai_budget WHERE id=1').fetchone()['calls']
     # Reaching this owner route already required a successful Supabase Auth user check.
-    auth='ready'
+    rehearsal = os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'
+    auth='simulated' if rehearsal else 'ready'
     limit=int(os.getenv('AI_CALL_LIMIT','100'))
-    return {'auth':auth,'database':'connected','backend':'running','question_mode':question_mode(),'ai_enabled':ai_enabled(),
+    return {'auth':auth,'database':'isolated rehearsal' if rehearsal else 'connected','backend':'running','question_mode':question_mode(),'ai_enabled':ai_enabled(),
             'drafting': 'last request failed' if draft_task and draft_task['status']=='failed' else ('ready' if ai_enabled() and calls<limit else 'unavailable'),
             'ai_calls_used':calls,'ai_call_limit':limit,'last_successful_ai_request':dict(success) if success else None,
             'last_actual_ai_request':dict(last) if last else None}
@@ -293,6 +299,7 @@ assets=Path(__file__).resolve().parent.parent/'frontend/dist'
 if (assets/'assets').exists(): app.mount('/assets',StaticFiles(directory=assets/'assets'),name='assets')
 @app.get('/')
 @app.get('/listing/{lid}')
+@app.get('/business/{lid}')
 def frontend(lid:str=''):
     if not (assets/'index.html').exists(): raise HTTPException(503,'Build frontend first')
     return FileResponse(assets/'index.html')

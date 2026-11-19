@@ -119,6 +119,25 @@ nav {
   padding: 0 0 16px;
   margin-bottom: 25px
 }
+nav { flex-wrap: wrap }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0 }
+.settings-item { border: 1px solid #d4ded3; border-radius: 9px; padding: 18px; margin: 18px 0 }
+.hours-row { display: grid; grid-template-columns: 110px 90px 1fr 1fr; align-items: center; gap: 12px; border-bottom: 1px solid #e6ebe1 }
+.hours-row label { font-size: 12px }
+.question-row { display: flex; gap: 14px; align-items: center }
+.question-row > label:first-child { flex: 1 }
+.opening-hours > div { display: flex; justify-content: space-between; gap: 20px; padding: 7px 0 }
+.opening-hours dt { font-size: 14px }
+.service-card { padding: 18px 0; border-bottom: 1px solid #d4ded3 }
+.service-card:first-of-type { padding-top: 0 }
+.service-card:last-child { border-bottom: 0 }
+.faq-options { display: flex; flex-wrap: wrap; gap: 8px }
+.inquiry dd { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 8px }
+@media(max-width:720px) {
+  .hours-row { grid-template-columns: 1fr 1fr }
+  .question-row { flex-wrap: wrap }
+  .question-row > label:first-child { flex-basis: 100% }
+}
 button,.button {
   font: inherit;
   font-weight: 600;

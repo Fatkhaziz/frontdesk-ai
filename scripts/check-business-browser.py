@@ -1,0 +1,103 @@
+"""Check the isolated rehearsal started with python -m scripts.rehearse."""
+import os
+from pathlib import Path
+
+from playwright.sync_api import sync_playwright, expect
+
+
+BASE = 'http://127.0.0.1:8002'
+screenshots = Path(os.getenv('FRONTDESK_SCREENSHOTS', '/tmp/frontdesk-business-screenshots'))
+screenshots.mkdir(exist_ok=True)
+
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(headless=True, executable_path=os.getenv('FRONTDESK_BROWSER_EXECUTABLE') or None)
+    context = browser.new_context(viewport={'width': 1365, 'height': 900})
+    page = context.new_page()
+    errors = []
+    context.on('page', lambda new_page: new_page.on('pageerror', lambda error: errors.append(str(error))))
+    page.on('pageerror', lambda error: errors.append(str(error)))
+
+    def login(email):
+        page.goto(BASE + '/')
+        page.get_by_label('Email', exact=True).fill(email)
+        page.get_by_label('Password', exact=True).fill('rehearsal')
+        page.get_by_role('button', name='Sign in', exact=True).click()
+        expect(page.get_by_role('heading', name='Your front desk')).to_be_visible()
+
+    login('owner-motors@example.invalid')
+    page.get_by_role('button', name='Business settings', exact=True).click()
+    expect(page.get_by_label('Business name', exact=True)).to_have_value('Demo Motors')
+    page.get_by_label('FAQ answer').fill('Rehearsal updated policy. Contact staff for changes.')
+    page.get_by_role('button', name='Save private settings', exact=True).click()
+    expect(page.get_by_role('status')).to_contain_text('Private business settings saved')
+    public = context.new_page()
+    public.goto(BASE + '/business/rehearsal-motors')
+    public.get_by_role('button', name='What is your cancellation policy?', exact=True).click()
+    public.get_by_role('button', name='Check approved answer').click()
+    expect(public.get_by_role('status')).to_contain_text('For this dealership example')
+    page.get_by_role('checkbox', name='I reviewed the saved settings').check()
+    page.get_by_role('button', name='Publish approved settings').click()
+    expect(page.get_by_role('status')).to_contain_text('Approved business settings published')
+    public.reload()
+    public.get_by_role('button', name='What is your cancellation policy?', exact=True).click()
+    public.get_by_role('button', name='Check approved answer').click()
+    expect(public.get_by_role('status')).to_contain_text('Rehearsal updated policy')
+    public.get_by_label('Service', exact=True).select_option('vehicle-service')
+    expect(public.get_by_label('What is the year, make and model of your vehicle?', exact=False)).to_be_visible()
+    public.get_by_label('What is the year, make and model of your vehicle?', exact=False).fill('2022 Toyota Camry')
+    public.get_by_label('Message', exact=True).fill('Rehearsal service request')
+    public.get_by_label('Your email or phone', exact=True).fill('rehearsal-customer@example.invalid')
+    public.get_by_role('button', name='Send inquiry to staff', exact=True).click()
+    expect(public.get_by_role('status')).to_contain_text('Your inquiry is saved')
+    page.get_by_role('button', name='Inquiries', exact=False).click()
+    expect(page.get_by_text('Rehearsal service request', exact=True)).to_be_visible()
+    expect(page.get_by_text('2022 Toyota Camry', exact=True)).to_be_visible()
+    page.get_by_label('Status for Vehicle service inquiry inquiry').select_option('pending')
+    expect(page.get_by_role('status')).to_contain_text('Inquiry status saved')
+    page.screenshot(path=str(screenshots / 'motors-inbox.png'), full_page=True)
+    page.get_by_role('button', name='Sign out', exact=True).click()
+
+    login('owner-salon@example.invalid')
+    expect(page.get_by_label('Business name', exact=True)).to_have_value('Demo Salon')
+    expect(page.get_by_role('button', name='Listings', exact=True)).to_have_count(0)
+    page.get_by_role('button', name='Inquiries', exact=False).click()
+    expect(page.get_by_text('Rehearsal service request', exact=True)).to_have_count(0)
+    page.get_by_role('button', name='Business settings', exact=True).click()
+    page.screenshot(path=str(screenshots / 'salon-settings.png'), full_page=True)
+    public.goto(BASE + '/business/rehearsal-salon')
+    public.get_by_role('button', name='What is your cancellation policy?', exact=True).click()
+    public.get_by_role('button', name='Check approved answer').click()
+    expect(public.get_by_role('status')).to_contain_text('24 hours ahead')
+    public.get_by_label('Service', exact=True).select_option('haircut')
+    expect(public.get_by_label('Which stylist would you prefer?', exact=False)).to_be_visible()
+    expect(public.get_by_label('What is the year, make and model of your vehicle?', exact=False)).to_have_count(0)
+    public.screenshot(path=str(screenshots / 'salon-public.png'), full_page=True)
+    public.get_by_label('Which stylist would you prefer?', exact=False).fill('Any available stylist')
+    public.get_by_label('Message', exact=True).fill('Rehearsal salon request')
+    public.get_by_label('Your email or phone', exact=True).fill('salon-customer@example.invalid')
+    public.get_by_role('button', name='Send inquiry to staff', exact=True).click()
+    expect(public.get_by_role('status')).to_contain_text('Your inquiry is saved')
+    page.get_by_role('button', name='Sign out', exact=True).click()
+
+    login('staff-salon@example.invalid')
+    expect(page.get_by_role('button', name='Save private settings', exact=True)).to_be_disabled()
+    page.get_by_role('button', name='Inquiries', exact=False).click()
+    expect(page.get_by_text('Rehearsal salon request', exact=True)).to_be_visible()
+    page.get_by_label('Status for Haircut consultation inquiry').select_option('resolved')
+    expect(page.get_by_role('status')).to_contain_text('Inquiry status saved')
+    page.reload()
+    expect(page.get_by_role('button', name='Sign in', exact=True)).to_be_visible()
+    login('owner-salon@example.invalid')
+    page.get_by_role('button', name='Inquiries', exact=False).click()
+    expect(page.get_by_label('Status for Haircut consultation inquiry')).to_have_value('resolved')
+
+    for target in [page, public]:
+        target.set_viewport_size({'width': 390, 'height': 844})
+        assert target.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.get_by_role('button', name='Business settings', exact=True).click()
+    expect(page.get_by_label('Business name', exact=True)).to_have_value('Demo Salon')
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    public.screenshot(path=str(screenshots / 'salon-mobile.png'), full_page=True)
+    assert not errors, errors
+    print('PASS: two business settings, approval and publication isolation, distinct FAQs and intake, saved inquiries, tenant isolation, staff permissions, reload persistence and mobile layout. Synthetic data and simulated Auth, no paid requests.')
+    browser.close()

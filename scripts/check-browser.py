@@ -25,6 +25,7 @@ with tempfile.TemporaryDirectory() as tmp:
     with connect() as c:
         c.executescript(Path('migrations/001_demo.sql').read_text().split('-- Application data')[0]+'COMMIT;')
         c.executescript(Path('migrations/002_listing_ai_tasks.sql').read_text().split('REVOKE')[0]+'COMMIT;')
+        c.executescript(Path('migrations/003_business_reception.sql').read_text().split('REVOKE')[0]+'COMMIT;')
         execute(c,'INSERT INTO businesses VALUES(%s,%s)',('browser','Demo Motors'))
     def test_identity(request: Request):
         if not request.headers.get('authorization','').startswith('Bearer '):
@@ -48,7 +49,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert server.started
     try:
         with patch('backend.main.call_ai',side_effect=mock_ai),sync_playwright() as p:
-            browser=p.chromium.launch(headless=True)
+            browser=p.chromium.launch(headless=True, executable_path=os.getenv('FRONTDESK_BROWSER_EXECUTABLE') or None)
             context=browser.new_context()
             page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(type(e).__name__))
             def login_route(route):
