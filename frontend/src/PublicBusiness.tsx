@@ -197,6 +197,7 @@ export default function PublicBusiness({ id, api }: { id: string; api: Api }) {
                   <label>
                     Service
                     <select
+                      aria-label="Service"
                       value={serviceId}
                       onChange={(e) => {
                         setServiceId(e.target.value);
