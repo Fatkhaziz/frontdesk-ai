@@ -45,7 +45,7 @@ def main():
                 raise RuntimeError('Required migration is missing or differs. Stop for schema review.')
         profile = public_profile(c, args.business)
         calls = execute(c, 'SELECT calls FROM ai_budget WHERE id=1').fetchone()['calls']
-    limit = int(os.getenv('AI_CALL_LIMIT', '100'))
+    limit = int(os.getenv('AI_CALL_LIMIT', '10'))
     byte_count = input_bytes(args.business, profile, QUESTION)
     cost = estimate_cost(byte_count)
     ceiling = estimate_cost(MAX_INPUT_BYTES)

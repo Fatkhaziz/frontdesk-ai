@@ -17,7 +17,7 @@ def call_ai(business, kind, payload, listing_id=None):
     if not key or not model:
         raise RuntimeError('AI is not configured')
     with connect() as c:
-        row = execute(c, 'UPDATE ai_budget SET calls=calls+1 WHERE id=1 AND calls<%s RETURNING calls', (int(os.getenv('AI_CALL_LIMIT','100')),)).fetchone()
+        row = execute(c, 'UPDATE ai_budget SET calls=calls+1 WHERE id=1 AND calls<%s RETURNING calls', (int(os.getenv('AI_CALL_LIMIT','10')),)).fetchone()
         if not row:
             raise RuntimeError('AI demonstration call budget reached')
     started = time.monotonic()

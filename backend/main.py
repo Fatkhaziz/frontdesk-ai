@@ -291,7 +291,7 @@ def diagnostics(m=Depends(owner)):
     # Reaching this owner route already required a successful Supabase Auth user check.
     rehearsal = os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'
     auth='simulated' if rehearsal else 'ready'
-    limit=int(os.getenv('AI_CALL_LIMIT','100'))
+    limit=int(os.getenv('AI_CALL_LIMIT','10'))
     return {'auth':auth,'database':'isolated rehearsal' if rehearsal else 'connected','backend':'running','question_mode':question_mode(),'ai_enabled':ai_enabled(),
             'drafting': 'last request failed' if draft_task and draft_task['status']=='failed' else ('ready' if ai_enabled() and calls<limit else 'unavailable'),
             'ai_calls_used':calls,'ai_call_limit':limit,'last_successful_ai_request':dict(success) if success else None,

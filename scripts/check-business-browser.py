@@ -51,6 +51,7 @@ with sync_playwright() as playwright:
     public.get_by_role('button', name='Send inquiry to staff', exact=True).click()
     expect(public.get_by_role('status').filter(has_text='Your inquiry is saved')).to_be_visible()
     page.get_by_role('button', name='Inquiries', exact=False).click()
+    page.get_by_role('button', name='Refresh inquiries', exact=True).click()
     expect(page.get_by_text('Rehearsal service request', exact=True)).to_be_visible()
     expect(page.get_by_text('2022 Toyota Camry', exact=True)).to_be_visible()
     page.get_by_label('Status for Vehicle service inquiry inquiry').select_option('pending')
@@ -62,6 +63,7 @@ with sync_playwright() as playwright:
     expect(page.get_by_label('Business name', exact=True)).to_have_value('Demo Salon')
     expect(page.get_by_role('button', name='Listings', exact=True)).to_have_count(0)
     page.get_by_role('button', name='Inquiries', exact=False).click()
+    page.get_by_role('button', name='Refresh inquiries', exact=True).click()
     expect(page.get_by_text('Rehearsal service request', exact=True)).to_have_count(0)
     page.get_by_role('button', name='Business settings', exact=True).click()
     page.screenshot(path=str(screenshots / 'salon-settings.png'), full_page=True)
@@ -83,6 +85,7 @@ with sync_playwright() as playwright:
     login('staff-salon@example.invalid')
     expect(page.get_by_role('button', name='Save private settings', exact=True)).to_be_disabled()
     page.get_by_role('button', name='Inquiries', exact=False).click()
+    page.get_by_role('button', name='Refresh inquiries', exact=True).click()
     expect(page.get_by_text('Rehearsal salon request', exact=True)).to_be_visible()
     page.get_by_label('Status for Haircut consultation inquiry').select_option('resolved')
     expect(page.get_by_role('status')).to_contain_text('Inquiry status saved')
@@ -90,6 +93,7 @@ with sync_playwright() as playwright:
     expect(page.get_by_role('button', name='Sign in', exact=True)).to_be_visible()
     login('owner-salon@example.invalid')
     page.get_by_role('button', name='Inquiries', exact=False).click()
+    page.get_by_role('button', name='Refresh inquiries', exact=True).click()
     expect(page.get_by_label('Status for Haircut consultation inquiry')).to_have_value('resolved')
 
     for target in [page, public]:

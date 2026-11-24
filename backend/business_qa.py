@@ -115,7 +115,7 @@ def answer_question(business_id, profile, question, request_id, read_current):
     started = time.monotonic()
     # Persist intent BEFORE any network call, and reserve from the existing cap.
     with connect() as c:
-        reserved = execute(c, 'UPDATE ai_budget SET calls=calls+1 WHERE id=1 AND calls<%s RETURNING calls', (int(os.getenv('AI_CALL_LIMIT', '100')),)).fetchone()
+        reserved = execute(c, 'UPDATE ai_budget SET calls=calls+1 WHERE id=1 AND calls<%s RETURNING calls', (int(os.getenv('AI_CALL_LIMIT', '10')),)).fetchone()
         if not reserved:
             return {**fallback, 'mode': 'error', 'reason': 'attempt_budget_exhausted'}
         execute(c, 'INSERT INTO ai_tasks VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)', (task_id, business_id, 'business_question', model, 'started', None, None, None, now()))
