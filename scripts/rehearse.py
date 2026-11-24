@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 ACCOUNTS = {
     'owner-motors@example.invalid': ('motors-owner', 'rehearsal-motors', 'owner'),
     'owner-salon@example.invalid': ('salon-owner', 'rehearsal-salon', 'owner'),
+    'owner-studio@example.invalid': ('studio-owner', 'rehearsal-studio', 'owner'),
     'staff-salon@example.invalid': ('salon-staff', 'rehearsal-salon', 'staff'),
 }
 
@@ -36,9 +37,9 @@ def main():
 
         with connect() as connection:
             connection.executescript(Path('migrations/001_demo.sql').read_text().split('-- Application data')[0] + 'COMMIT;')
-            for migration in ['002_listing_ai_tasks.sql', '003_business_reception.sql']:
+            for migration in ['002_listing_ai_tasks.sql', '003_business_reception.sql', '004_ai_interaction_evidence.sql']:
                 connection.executescript(Path('migrations', migration).read_text().split('REVOKE')[0] + 'COMMIT;')
-            for business_id, name in [('rehearsal-motors', 'Demo Motors'), ('rehearsal-salon', 'Demo Salon')]:
+            for business_id, name in [('rehearsal-motors', 'Demo Motors'), ('rehearsal-salon', 'Demo Salon'), ('rehearsal-studio', 'Demo Studio')]:
                 execute(connection, 'INSERT INTO businesses VALUES(%s,%s)', (business_id, name))
 
         def rehearsal_identity(request: Request):
@@ -62,7 +63,7 @@ def main():
                     'refresh_token': 'rehearsal-only', 'user': {'id': account[0], 'aud': 'authenticated', 'email': body['email']}}
 
         client = TestClient(app)
-        for email, domain in [('owner-motors@example.invalid', 'dealership'), ('owner-salon@example.invalid', 'salon')]:
+        for email, domain in [('owner-motors@example.invalid', 'dealership'), ('owner-salon@example.invalid', 'salon'), ('owner-studio@example.invalid', 'photography_studio')]:
             account = ACCOUNTS[email]
             headers = {'Authorization': 'Bearer ' + make_token(account[0])}
             settings = sample_profile(domain)
@@ -91,18 +92,19 @@ def make_token(subject):
 
 def sample_profile(domain):
     salon = domain == 'salon'
+    studio = domain == 'photography_studio'
     return {
-        'name': 'Demo Salon' if salon else 'Demo Motors', 'domain': domain,
+        'name': 'Demo Studio' if studio else 'Demo Salon' if salon else 'Demo Motors', 'domain': domain,
         'about': 'Synthetic rehearsal business. Inquiries go to this business’s staff inbox.',
         'contact': 'salon@example.invalid' if salon else 'motors@example.invalid',
         'time_zone': 'America/New_York',
         'hours': [{'day': day, 'opens': '10:00' if salon else '09:00', 'closes': '18:00' if salon else '17:00'} for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']],
         'services': [{
-            'id': 'haircut' if salon else 'vehicle-service', 'name': 'Haircut consultation' if salon else 'Vehicle service inquiry',
+            'id': 'portrait-session' if studio else 'haircut' if salon else 'vehicle-service', 'name': 'Portrait session' if studio else 'Haircut consultation' if salon else 'Vehicle service inquiry',
             'description': 'Staff review your request and arrange the time.', 'duration_minutes': 45 if salon else 30, 'price_cents': 4500 if salon else None,
-            'questions': [{'id': 'stylist' if salon else 'vehicle', 'label': 'Which stylist would you prefer?' if salon else 'What is the year, make and model of your vehicle?', 'required': True}],
+            'questions': [{'id': 'participants' if studio else 'stylist' if salon else 'vehicle', 'label': 'How many participants and which location?' if studio else 'Which stylist would you prefer?' if salon else 'What is the year, make and model of your vehicle?', 'required': True}],
         }],
-        'faqs': [{'question': 'What is your cancellation policy?', 'answer': 'For this salon example, request changes at least 24 hours ahead.' if salon else 'For this dealership example, contact service staff to change your visit.'}],
+        'faqs': [{'question': 'What is your cancellation policy?', 'answer': 'For this studio example, contact staff about package changes.' if studio else 'For this salon example, request changes at least 24 hours ahead.' if salon else 'For this dealership example, contact service staff to change your visit.'}],
     }
 
 

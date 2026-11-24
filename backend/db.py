@@ -15,7 +15,8 @@ def connect():
     else:
         import psycopg
         from psycopg.rows import dict_row
-        c = psycopg.connect(url, row_factory=dict_row, connect_timeout=10)
+        from .config import database_options
+        c = psycopg.connect(**database_options(), row_factory=dict_row, connect_timeout=10)
     try:
         yield c
         c.commit()

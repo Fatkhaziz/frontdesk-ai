@@ -101,3 +101,19 @@ with sync_playwright() as playwright:
     assert not errors, errors
     print('PASS: two business settings, approval and publication isolation, distinct FAQs and intake, saved inquiries, tenant isolation, staff permissions, reload persistence and mobile layout. Synthetic data and simulated Auth, no paid requests.')
     browser.close()
+
+# Studio uses the same public page and explicit inquiry path. Paid AI stays disabled.
+with sync_playwright() as playwright:
+    browser = playwright.chromium.launch(headless=True, executable_path=os.getenv('FRONTDESK_BROWSER_EXECUTABLE') or None)
+    page = browser.new_page(viewport={'width': 390, 'height': 844})
+    page.goto(BASE + '/business/rehearsal-studio')
+    expect(page.get_by_role('heading', name='Demo Studio', exact=True)).to_be_visible()
+    page.get_by_label('Service', exact=True).select_option('portrait-session')
+    page.get_by_label('How many participants and which location?', exact=False).fill('Two participants at the studio')
+    page.get_by_label('Message', exact=True).fill('Rehearsal portrait inquiry')
+    page.get_by_label('Your email or phone', exact=True).fill('studio@example.invalid')
+    page.get_by_role('button', name='Send inquiry to staff', exact=True).click()
+    expect(page.get_by_role('status')).to_contain_text('Your inquiry is saved')
+    page.screenshot(path=str(screenshots / 'studio-mobile.png'), full_page=True)
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    browser.close()

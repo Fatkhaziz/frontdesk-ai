@@ -4,7 +4,7 @@ FrontDesk AI is an AI receptionist platform for small businesses. The [November 
 
 ## Fall feasibility prototype
 
-The fall continuation now adds **Business settings** and approved public business pages for a dealership and a salon. Each business configures its own hours, services, required intake questions and FAQ answers. Owners save privately and approve a saved revision before publication. Staff can handle their business's inquiries. The original vehicle/Grok demo remains available for dealerships. See [fall progress and practice instructions](docs/fall-progress.md) for current evidence and the separate rehearsal launcher.
+Fall Release 1 adds shared **Business settings**, published business Q&A and explicit service inquiries for a dealership, salon and photography studio. See the current [Release 1 handoff](docs/fall-release-1.md) for exact URLs, current test evidence, the showcase script and the user-initiated cost-gated live check. Each business configures its own hours, services, required intake questions and FAQ answers. Owners save privately and approve a saved revision before publication. Staff can handle their business's inquiries. The original vehicle/Grok demo remains available for dealerships. See [fall progress and practice instructions](docs/fall-progress.md) for current evidence and the separate rehearsal launcher.
 
 React/TypeScript and FastAPI serve one application; Supabase provides PostgreSQL and Auth, and xAI provides server-side Grok drafting and bounded question classification. This demo covers structured vehicle facts → private AI draft → owner approval of a saved revision → public listing → approved-fact answers → staff inquiry handoff. Spring bookings, events, billing, photos, and other extensions are outside this preparation.
 
@@ -38,7 +38,7 @@ python -m backend.migrate
 python -m backend.check_connection
 ```
 
-Migrations are atomic, serialized, and checksum-tracked. An existing manually created untracked schema is refused for review; do not recreate/reset it. `001_demo.sql` defines the existing data; additive `002_listing_ai_tasks.sql` links new AI requests to listings for safe deletion. Migrations 001 and 002 were applied in the earlier Supabase demo. Additive `003_business_reception.sql` creates business profiles, service inquiries and publication events. Apply pending migrations before starting this updated application. This continuation has not applied 003 to the live project. Provision the business/membership using parameterized administration or the Supabase SQL editor with the actual confirmed Auth UUID. Browser database roles have no application-table grants.
+Migrations are atomic, serialized, and checksum-tracked. An existing manually created untracked schema is refused for review; do not recreate/reset it. `001_demo.sql` defines the existing data; additive `002_listing_ai_tasks.sql` links new AI requests to listings for safe deletion. Migrations 001 and 002 were applied in the earlier Supabase demo. Additive `003_business_reception.sql` creates business profiles, service inquiries and publication events; `004_ai_interaction_evidence.sql` adds provenance for new business Q&A attempts. Apply pending migrations before starting this updated application. This continuation has not applied 003 or 004 to the live project. Provision the business/membership using parameterized administration or the Supabase SQL editor with the actual confirmed Auth UUID. Browser database roles have no application-table grants.
 
 ## Build and run
 
@@ -78,9 +78,9 @@ npm run build --prefix frontend
 git diff --check
 ```
 
-28 backend tests use isolated SQLite with foreign keys enabled and injected Auth/AI. Five frontend tests cover dollars/cents, validation, selection, ordering, business approval controls, staff restrictions and service inquiry retries in a simulated DOM. No lint/format script existed; the build includes strict TypeScript checks. Optional `scripts/check-browser.py` uses Playwright/Chromium, a temporary SQLite database and mocked Auth/Grok on loopback port 8001 to rehearse the full owner/public/delete workflow at desktop/mobile sizes. Install browser tooling outside the repository's tracked artifacts; run with the project root on `PYTHONPATH`. Automated tests never load `.env` or call paid xAI.
+41 backend tests use isolated SQLite with foreign keys enabled and injected Auth/AI. Three frontend domain tests passed here; the simulated-DOM business interaction suite remains blocked by unavailable dependencies. It includes business approval controls, staff restrictions, service inquiry retries and Q&A evidence assertions. No lint/format script existed; the build includes strict TypeScript checks. Optional `scripts/check-browser.py` uses Playwright/Chromium, a temporary SQLite database and mocked Auth/Grok on loopback port 8001 to rehearse the full owner/public/delete workflow at desktop/mobile sizes. Install browser tooling outside the repository's tracked artifacts; run with the project root on `PYTHONPATH`. Automated tests never load `.env` or call paid xAI.
 
-These mocks are not real integration evidence. The handoff records the separate two-request live verification and its authentication limitations. Real Safari sign-in must use the owner's credentials privately.
+These mocks are not real integration evidence. Earlier handoffs describe historical provider checks; this continuation made no paid requests and does not attribute new metadata to historical records. Real Safari sign-in must use the owner's credentials privately.
 
 ## Deployment and limits
 

@@ -105,3 +105,29 @@ test('owners must save changed settings and approve the saved revision before pu
   assert.equal(button('Save private settings').matches(':disabled'), true);
   await act(async () => root.render(null));
 });
+
+test('business Q&A shows mode, published evidence and handoff without submitting an inquiry', async () => {
+  const profile = { ...exampleProfile('Demo Studio', 'photography_studio'), revision: 3 };
+  let result = { answer: 'A portrait session takes 60 minutes.', handoff: false, mode: 'live_ai', revision: 3,
+    sources: [{ id: 'studio:r3:duration', label: 'Portrait session duration', revision: 3, text: 'A portrait session takes 60 minutes.' }] };
+  let inquiries = 0;
+  const api = async (path, method) => {
+    if (!method) return profile;
+    if (path.endsWith('/inquiries')) { inquiries++; return {}; }
+    return result;
+  };
+  await act(async () => root.render(h(PublicBusiness, { id: 'studio', api })));
+  assert.match(text(), /Photography studio/);
+  await fill(field('Your question'), 'How long would a portrait take?');
+  await submit(field('Your question').closest('form'));
+  assert.match(text(), /Live AI · checked published evidence/);
+  assert.match(text(), /Portrait session duration · revision 3/);
+  assert.equal(document.querySelector('blockquote').textContent, result.sources[0].text);
+  result = { answer: 'Please send an inquiry.', handoff: true, mode: 'error', revision: 3, reason: 'stale_source', sources: [] };
+  await submit(field('Your question').closest('form'));
+  assert.match(text(), /Error · answer unavailable/);
+  assert.equal(document.querySelectorAll('blockquote').length, 0);
+  assert.equal(inquiries, 0);
+  assert.equal(field('Message').value, 'How long would a portrait take?');
+  await act(async () => root.render(null));
+});

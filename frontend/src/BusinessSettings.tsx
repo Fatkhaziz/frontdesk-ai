@@ -93,6 +93,7 @@ export default function BusinessSettings({
           >
             Use salon example
           </button>
+          <button type="button" onClick={() => useExample('photography_studio')}>Use photography studio example</button>
         </div>
         <small>
           Examples fill a private form. Review the contact, services and
@@ -121,6 +122,7 @@ export default function BusinessSettings({
             >
               <option value="dealership">Dealership</option>
               <option value="salon">Salon</option>
+              <option value="photography_studio">Photography studio</option>
             </select>
           </label>
           <label>

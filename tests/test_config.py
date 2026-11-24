@@ -20,3 +20,32 @@ class PublicConfig(unittest.TestCase):
             with patch.dict(os.environ, {'VITE_SUPABASE_PUBLISHABLE_KEY':key}, clear=True):
                 with self.assertRaises(RuntimeError):
                     supabase_config()
+
+
+class DatabaseCA(unittest.TestCase):
+    def test_missing_path_resolves_only_matching_valid_project_certificate(self):
+        import ssl
+        import tempfile
+        from pathlib import Path
+        from backend.config import database_options
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); (root / '.certs').mkdir()
+            cert = root / '.certs' / 'test-ca.pem'; cert.write_text('invalid PEM')
+            with patch.dict(os.environ, {'DATABASE_URL': 'postgresql://localhost/test?sslmode=verify-full&sslrootcert=/old/location/test-ca.pem'}):
+                with self.assertRaises(ssl.SSLError): database_options(root)
+                with patch('ssl.create_default_context') as validate:
+                    options = database_options(root)
+                    self.assertEqual(options['sslmode'], 'verify-full')
+                    self.assertEqual(options['sslrootcert'], str(cert.resolve()))
+                    validate.assert_called_once_with(cafile=str(cert.resolve()))
+                cert.unlink()
+                self.assertEqual(database_options(root)['sslrootcert'], '/old/location/test-ca.pem')
+
+    def test_existing_configured_certificate_is_not_replaced(self):
+        import tempfile
+        from pathlib import Path
+        from backend.config import database_options
+        with tempfile.NamedTemporaryFile() as cert:
+            with patch.dict(os.environ, {'DATABASE_URL': 'postgresql://localhost/test?sslmode=verify-full&sslrootcert=' + cert.name}):
+                with patch('ssl.create_default_context', side_effect=AssertionError('Do not replace configured trust')):
+                    self.assertEqual(database_options()['sslrootcert'], cert.name)

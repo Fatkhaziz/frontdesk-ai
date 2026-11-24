@@ -9,6 +9,7 @@ export default function PublicBusiness({ id, api }: { id: string; api: Api }) {
   const [error, setError] = useState("");
   const [question, setQuestion] = useState(""),
     [answer, setAnswer] = useState("");
+  const [evidence, setEvidence] = useState<{ mode: string; reason?: string; revision?: number; handoff: boolean; sources: { id: string; text: string; label: string; revision: number }[] } | null>(null);
   const [serviceId, setServiceId] = useState(""),
     [answers, setAnswers] = useState<Record<string, string>>({});
   const [message, setMessage] = useState(""),
@@ -29,6 +30,8 @@ export default function PublicBusiness({ id, api }: { id: string; api: Api }) {
     locked.current = true;
     setBusy(true);
     setError("");
+    setAnswer("");
+    setEvidence(null);
     try {
       const result = await api(
         "/public/businesses/" + id + "/questions",
@@ -36,6 +39,7 @@ export default function PublicBusiness({ id, api }: { id: string; api: Api }) {
         { question },
       );
       setAnswer(result.answer);
+      setEvidence({ ...result, sources: result.sources || [] });
       if (result.handoff) setMessage(question);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Please try again.");
@@ -89,7 +93,7 @@ export default function PublicBusiness({ id, api }: { id: string; api: Api }) {
         <>
           <div className="public-hero">
             <p className="eyebrow">
-              {profile.domain === "salon" ? "Salon" : "Dealership"}
+              {profile.domain === "photography_studio" ? "Photography studio" : profile.domain === "salon" ? "Salon" : "Dealership"}
             </p>
             <h1>{profile.name}</h1>
             <p className="lead">{profile.about}</p>
@@ -145,8 +149,10 @@ export default function PublicBusiness({ id, api }: { id: string; api: Api }) {
               <section>
                 <h2>Ask this business</h2>
                 <p>
-                  These answers use the business’s published FAQ. This section
-                  uses exact question matching and makes no paid AI request.
+                  Ask in your own words. When live AI is enabled, it selects
+                  published statements; otherwise, questions use exact FAQ matching.
+                  Sources and the answering mode appear below. Send contact details
+                  only in the separate inquiry form.
                 </p>
                 <div className="faq-options">
                   {profile.faqs.map((faq) => (
@@ -169,7 +175,7 @@ export default function PublicBusiness({ id, api }: { id: string; api: Api }) {
                     />
                   </label>
                   <button className="primary" disabled={busy}>
-                    Check approved answer
+                    {busy ? "Checking…" : "Check approved answer"}
                   </button>
                 </form>
                 {answer && (
@@ -177,6 +183,12 @@ export default function PublicBusiness({ id, api }: { id: string; api: Api }) {
                     {answer}
                   </p>
                 )}
+                {evidence && <div id="published-sources" className="saved-summary">
+                  <strong>{({ live_ai: "Live AI · checked published evidence", exact_match: "Exact FAQ matching · no AI call", fallback: "Fallback · staff review needed", error: "Error · answer unavailable" } as Record<string, string>)[evidence.mode] || "Staff review"}</strong>
+                  <p>Published revision {evidence.revision}. {evidence.handoff ? "Staff follow-up is offered; no inquiry has been sent." : "Published source statements:"}</p>
+                  {evidence.reason && evidence.mode === "error" && <p>Please retry or send an inquiry to staff.</p>}
+                  <ul>{evidence.sources.map(source => <li key={source.id}><strong>{source.label} · revision {source.revision}</strong><blockquote>{source.text}</blockquote></li>)}</ul>
+                </div>}
               </section>
               <section id="business-inquiry">
                 <h2>Send an inquiry</h2>

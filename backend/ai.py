@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -37,12 +38,17 @@ def call_ai(business, kind, payload, listing_id=None):
             response.raise_for_status()
             body = response.json()
             result = json.loads(body['choices'][0]['message']['content'])
-            usage = {**body.get('usage', {}), 'provider_model': body.get('model'), 'provider_response_id': body.get('id')}
+            # Never persist arbitrary provider output or metadata as logs.
+            raw_usage = body.get('usage') or {}
+            usage = {k: v for k, v in raw_usage.items() if k in ('prompt_tokens', 'completion_tokens', 'total_tokens') and type(v) is int and v >= 0} if isinstance(raw_usage, dict) else {}
+            response_id = body.get('id')
+            safe_id = response_id if isinstance(response_id, str) and re.fullmatch(r'[\w.-]{1,200}', response_id) and response_id != key and not re.search(r'bearer|password|secret|xai-|sk-', response_id, re.I) else None
+            usage.update(provider_model=model, provider_response_id=safe_id)
             status = 'succeeded'
             return result
     finally:
         with connect() as c:
             task_id = str(uuid.uuid4())
-            execute(c, 'INSERT INTO ai_tasks VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)', (task_id, business, kind, model, status, int((time.monotonic()-started)*1000), json.dumps(result), json.dumps(usage), now()))
+            execute(c, 'INSERT INTO ai_tasks VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)', (task_id, business, kind, model, status, int((time.monotonic()-started)*1000), None, json.dumps(usage), now()))
             if listing_id:
                 execute(c, 'INSERT INTO listing_ai_tasks VALUES (%s,%s,%s)', (task_id, listing_id, business))

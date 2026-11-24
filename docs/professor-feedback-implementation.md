@@ -1,5 +1,8 @@
 # Professors feedback implementation handoff
 
+> Historical November 19 snapshot. The [November 24 Fall Release 1 handoff](fall-release-1.md) supersedes implementation status, answering behavior, tests and verification instructions below.
+
+
 The November 19 requirements and design are the revised specification. The code at d73c2c4896967e3d913116567fa9b7504d350c31 remains the dealership feasibility demo. The written scope and acceptance tests align with the professors' annotated feedback. The subsequent fall implementation adds shared business configuration and service inquiries; see [fall progress](fall-progress.md) for executed checks and remaining live verification. The baseline evidence below describes the earlier vehicle demo.
 
 ## Current evidence

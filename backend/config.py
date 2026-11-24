@@ -31,3 +31,25 @@ def supabase_config():
         if role != 'anon':
             raise RuntimeError('Only an anon or publishable Supabase key may be public')
     return url.rstrip('/'), key
+
+
+def database_options(project_root=None):
+    """Resolve a relocated project CA without editing secrets or weakening TLS.
+
+    An existing configured CA always wins. Only a missing path whose basename
+    exists in this checkout's .certs directory may relocate; invalid PEM fails.
+    The connection URL and certificate contents are never returned to clients.
+    """
+    from pathlib import Path
+    import ssl
+    from psycopg.conninfo import conninfo_to_dict
+    options = conninfo_to_dict(os.getenv('DATABASE_URL', ''))
+    configured = options.get('sslrootcert')
+    if configured and not Path(configured).is_file():
+        root = Path(project_root) if project_root else Path(__file__).resolve().parent.parent
+        directory = (root / '.certs').resolve()
+        candidate = directory / Path(configured).name
+        if candidate.is_file() and candidate.resolve().parent == directory:
+            ssl.create_default_context(cafile=str(candidate))
+            options['sslrootcert'] = str(candidate)
+    return options

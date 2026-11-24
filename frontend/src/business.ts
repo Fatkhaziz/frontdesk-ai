@@ -9,7 +9,7 @@ export type BusinessService = {
 };
 export type BusinessProfile = {
   name: string;
-  domain: "dealership" | "salon";
+  domain: "dealership" | "salon" | "photography_studio";
   about: string;
   contact: string;
   time_zone: string;
@@ -28,13 +28,14 @@ export type Workspace = {
 };
 export function exampleProfile(
   name: string,
-  domain: "dealership" | "salon",
+  domain: "dealership" | "salon" | "photography_studio",
 ): BusinessProfile {
   const salon = domain === "salon";
+  const studio = domain === "photography_studio";
   return {
     name,
     domain,
-    about: salon
+    about: studio ? "Ask about our photography packages and send your session details to our team." : salon
       ? "Tell us which service you are interested in. Our team will follow up."
       : "Explore our vehicles and ask our team about service.",
     contact: "Update with the public business contact",
@@ -54,13 +55,13 @@ export function exampleProfile(
     })),
     services: [
       {
-        id: salon ? "haircut" : "vehicle-service",
-        name: salon ? "Haircut consultation" : "Vehicle service inquiry",
+        id: studio ? "portrait-session" : salon ? "haircut" : "vehicle-service",
+        name: studio ? "Portrait session" : salon ? "Haircut consultation" : "Vehicle service inquiry",
         description:
           "Submit a request for staff review. Times are arranged by staff.",
-        duration_minutes: salon ? 45 : 30,
+        duration_minutes: studio ? 60 : salon ? 45 : 30,
         price_cents: null,
-        questions: salon
+        questions: studio ? [{ id: "package", label: "Which photography package interests you?", required: true }, { id: "participants", label: "How many participants and which location?", required: true }] : salon
           ? [
               {
                 id: "preferred-stylist",

@@ -48,7 +48,7 @@ function App() {
     useEffect(() => { api('/config').then(setConfig).catch(() => setMessage('The service is unavailable. Please reload in a moment.')); }, []);
     useEffect(() => { if (token)
         run(async () => { const cs = await load(); select(cs.find(c => c.id === sessionStorage.getItem('frontdesk-selected-listing')) || defaultCar(cs) || null); }); }, [token]);
-    const salon = workspace?.profile?.domain === 'salon';
+    const salon = workspace?.profile && workspace.profile.domain !== 'dealership';
     const tabs = ['Business settings', ...(!salon ? ['Listings'] : []), 'Inquiries', ...(workspace?.role === 'owner' ? ['System status'] : [])];
     const visibleTab = tabs.includes(tab) ? tab : 'Business settings';
     return <main><header><a className="brand" href="/">FrontDesk <strong>AI</strong></a><span>{token ? workspace?.profile?.name || workspace?.name : 'For small businesses'} <span className="header-tag">Fall feasibility demo</span></span></header>

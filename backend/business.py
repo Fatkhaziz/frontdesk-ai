@@ -3,10 +3,10 @@ import json
 import re
 import uuid
 from datetime import time
-from typing import Literal
+from typing import Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .ai import now
@@ -19,8 +19,8 @@ class Strict(BaseModel):
 
 class OpeningHours(Strict):
     day: Literal['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    opens: str | None = None
-    closes: str | None = None
+    opens: Optional[str] = None
+    closes: Optional[str] = None
 
     @model_validator(mode='after')
     def valid_interval(self):
@@ -46,7 +46,7 @@ class Service(Strict):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default='', max_length=700)
     duration_minutes: int = Field(ge=5, le=1440)
-    price_cents: int | None = Field(default=None, ge=0, le=1000000000)
+    price_cents: Optional[int] = Field(default=None, ge=0, le=1000000000)
     questions: list[IntakeQuestion] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode='after')
@@ -67,7 +67,7 @@ def normalize(value):
 
 class Profile(Strict):
     name: str = Field(min_length=1, max_length=120)
-    domain: Literal['dealership', 'salon']
+    domain: Literal['dealership', 'salon', 'photography_studio']
     about: str = Field(default='', max_length=1200)
     contact: str = Field(min_length=1, max_length=300)
     time_zone: str = Field(default='America/New_York', max_length=80)
@@ -113,7 +113,7 @@ class BusinessQuestion(Strict):
 class BusinessInquiry(Strict):
     request_key: uuid.UUID
     expected_revision: int = Field(gt=0)
-    service_id: str | None = None
+    service_id: Optional[str] = None
     message: str = Field(min_length=1, max_length=1000)
     contact: str = Field(min_length=3, max_length=300)
     answers: dict[str, str] = Field(default_factory=dict, max_length=12)
@@ -187,14 +187,14 @@ def create_router(identity, owner):
             return public_profile(c, business_id)
 
     @router.post('/api/public/businesses/{business_id}/questions')
-    def answer(business_id: str, body: BusinessQuestion):
+    def answer(business_id: str, body: BusinessQuestion, request: Request):
+        from .business_qa import answer_question
         with connect() as c:
             profile = public_profile(c, business_id)
-        match = next((faq for faq in profile['faqs'] if normalize(faq['question']) == normalize(body.question)), None)
-        return {
-            'answer': match['answer'] if match else 'That question needs staff review. You can send an inquiry below.',
-            'handoff': match is None, 'revision': profile['revision'], 'mode': 'approved_faq',
-        }
+        def current():
+            with connect() as c:
+                return public_profile(c, business_id)
+        return answer_question(business_id, profile, body.question, request.state.request_id, current)
 
     @router.post('/api/public/businesses/{business_id}/inquiries', status_code=201)
     def submit_inquiry(business_id: str, body: BusinessInquiry):

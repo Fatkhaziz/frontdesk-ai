@@ -32,6 +32,7 @@ async def validation_error(request, exc):
 @app.middleware('http')
 async def trace(request: Request, next_handler):
     rid = str(uuid.uuid4())
+    request.state.request_id = rid
     start = time.monotonic()
     try:
         response = await next_handler(request)
@@ -283,9 +284,10 @@ def diagnostics(m=Depends(owner)):
     with connect() as c:
         execute(c,'SELECT 1').fetchone()
         last=execute(c,'SELECT model,kind,status,duration_ms,result,usage,created_at FROM ai_tasks WHERE business_id=%s ORDER BY created_at DESC LIMIT 1',(m['business_id'],)).fetchone()
-        success=execute(c,"SELECT model,kind,usage,created_at FROM ai_tasks WHERE business_id=%s AND status='succeeded' ORDER BY created_at DESC LIMIT 1",(m['business_id'],)).fetchone()
+        success=execute(c,"SELECT model,kind,usage,created_at FROM ai_tasks WHERE business_id=%s AND status='succeeded' AND kind!='business_question' ORDER BY created_at DESC LIMIT 1",(m['business_id'],)).fetchone()
         draft_task=execute(c,"SELECT status FROM ai_tasks WHERE business_id=%s AND kind='draft' ORDER BY created_at DESC LIMIT 1",(m['business_id'],)).fetchone()
         calls=execute(c,'SELECT calls FROM ai_budget WHERE id=1').fetchone()['calls']
+        evidence=execute(c,'SELECT e.*,t.model,t.created_at FROM ai_interaction_evidence e JOIN ai_tasks t ON t.id=e.task_id AND t.business_id=e.business_id WHERE e.business_id=%s ORDER BY t.created_at DESC LIMIT 1',(m['business_id'],)).fetchone()
     # Reaching this owner route already required a successful Supabase Auth user check.
     rehearsal = os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'
     auth='simulated' if rehearsal else 'ready'
@@ -293,7 +295,13 @@ def diagnostics(m=Depends(owner)):
     return {'auth':auth,'database':'isolated rehearsal' if rehearsal else 'connected','backend':'running','question_mode':question_mode(),'ai_enabled':ai_enabled(),
             'drafting': 'last request failed' if draft_task and draft_task['status']=='failed' else ('ready' if ai_enabled() and calls<limit else 'unavailable'),
             'ai_calls_used':calls,'ai_call_limit':limit,'last_successful_ai_request':dict(success) if success else None,
-            'last_actual_ai_request':dict(last) if last else None}
+            'last_actual_ai_request':dict(last) if last else None, 'last_business_qa_evidence':dict(evidence) if evidence else None}
+
+@app.get('/api/ai/evidence')
+def ai_evidence(m=Depends(owner)):
+    with connect() as c:
+        rows = execute(c, 'SELECT e.*,t.kind,t.model,t.created_at FROM ai_interaction_evidence e JOIN ai_tasks t ON t.id=e.task_id AND t.business_id=e.business_id WHERE e.business_id=%s ORDER BY t.created_at DESC LIMIT 50', (m['business_id'],)).fetchall()
+    return [{**dict(r), **{k: json.loads(r[k]) if r[k] is not None else None for k in ('approved_sources','selected_sources','token_usage')}} for r in rows]
 
 assets=Path(__file__).resolve().parent.parent/'frontend/dist'
 if (assets/'assets').exists(): app.mount('/assets',StaticFiles(directory=assets/'assets'),name='assets')

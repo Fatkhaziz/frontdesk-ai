@@ -4,6 +4,8 @@ CIS 457 Senior Design 1 | Team submission | Revised November 19, 2026
 
 Fatkhaziz Mukhamedov, Al Baraa Khaled, Mohammad Abdullah, Amar Al Balkhi
 
+> November 24 implementation status: [Fall Release 1](fall-release-1.md) adds shared studio configuration and evidence-checked natural-language business Q&A. The full-system architecture below includes future work; its earlier demo-gap statements describe the November 19 baseline.
+
 ## 1 Scope and architectural decisions
 
 This design implements the revised FrontDesk AI Requirements Use Cases and Constraints dated November 19, 2026. The target is one hosted platform serving businesses in different domains with shared receptionist services and separate operating rules. The configured examples are a dealership, salon and photography studio. The current dealership demo is a working subset. New entities, endpoints and workflows below are implementation designs.

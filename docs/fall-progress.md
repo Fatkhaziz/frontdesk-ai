@@ -1,5 +1,8 @@
 # Fall progress and practice guide
 
+> Historical November 19 snapshot. The [November 24 Fall Release 1 handoff](fall-release-1.md) supersedes implementation status, answering behavior, tests and verification instructions below.
+
+
 Updated November 19, 2026. FrontDesk AI serves small businesses. Dealership and salon examples now share one configuration and inquiry workflow. This remains a fall feasibility prototype toward the semester's 20% milestone; the final system's platform administration, scheduling, voice and broader dealership operations remain future work.
 
 ## What this continuation implements

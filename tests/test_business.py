@@ -29,11 +29,11 @@ def profile(name='Demo Motors', domain='dealership'):
 class BusinessReception(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {'TESTING': '1', 'DATABASE_URL': 'sqlite:///' + self.tmp.name + '/business.sqlite'})
+        self.env = patch.dict(os.environ, {'TESTING': '1', 'QUESTION_MODE': 'demo', 'DRAFT_AI_ENABLED': '0', 'XAI_API_KEY': '', 'XAI_MODEL': '', 'DATABASE_URL': 'sqlite:///' + self.tmp.name + '/business.sqlite'})
         self.env.start()
         with connect() as c:
             c.executescript(Path('migrations/001_demo.sql').read_text().split('-- Application data')[0] + 'COMMIT;')
-            for filename in ['002_listing_ai_tasks.sql', '003_business_reception.sql']:
+            for filename in ['002_listing_ai_tasks.sql', '003_business_reception.sql', '004_ai_interaction_evidence.sql']:
                 c.executescript(Path('migrations', filename).read_text().split('REVOKE')[0] + 'COMMIT;')
             for business in ['a', 'b']:
                 execute(c, 'INSERT INTO businesses VALUES(%s,%s)', (business, business))

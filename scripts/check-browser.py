@@ -26,6 +26,7 @@ with tempfile.TemporaryDirectory() as tmp:
         c.executescript(Path('migrations/001_demo.sql').read_text().split('-- Application data')[0]+'COMMIT;')
         c.executescript(Path('migrations/002_listing_ai_tasks.sql').read_text().split('REVOKE')[0]+'COMMIT;')
         c.executescript(Path('migrations/003_business_reception.sql').read_text().split('REVOKE')[0]+'COMMIT;')
+        c.executescript(Path('migrations/004_ai_interaction_evidence.sql').read_text().split('REVOKE')[0]+'COMMIT;')
         execute(c,'INSERT INTO businesses VALUES(%s,%s)',('browser','Demo Motors'))
     def test_identity(request: Request):
         if not request.headers.get('authorization','').startswith('Bearer '):
@@ -79,7 +80,7 @@ with tempfile.TemporaryDirectory() as tmp:
             page.get_by_role('button',name='Save description').click();expect(page.get_by_role('status')).to_contain_text('Description saved')
             page.get_by_role('checkbox').check();page.get_by_role('button',name='Publish approved revision').click();expect(page.get_by_role('status')).to_contain_text('Approved revision published')
             expect(page.get_by_role('link',name='View public page')).to_be_visible()
-            page.screenshot(path='/private/tmp/frontdesk-dashboard.png',full_page=True)
+            page.screenshot(path='/tmp/frontdesk-dashboard.png',full_page=True)
             public=context.new_page();public.goto('http://127.0.0.1:8001/listing/'+lid)
             expect(public.get_by_role('heading',name='2022 Toyota Camry',exact=True)).to_be_visible()
             public.get_by_label('Your question',exact=True).fill('Price and mileage?');public.get_by_role('button',name='Ask question').click()

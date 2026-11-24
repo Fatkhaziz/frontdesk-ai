@@ -1,15 +1,14 @@
 """Local launcher, called after scripts/run-local.sh loads the project .env."""
 import os
 from pathlib import Path
-from psycopg.conninfo import conninfo_to_dict
 from .db import connect, execute
-from .config import supabase_config, question_mode
+from .config import supabase_config, question_mode, database_options
 from .errors import error_category
 
 
 def main():
     try:
-        options = conninfo_to_dict(os.environ.get('DATABASE_URL', ''))
+        options = database_options()
         if options.get('sslmode') != 'verify-full':
             raise RuntimeError('Local database requires sslmode=verify-full')
         cert = Path(options.get('sslrootcert', ''))
