@@ -55,8 +55,7 @@ jobs:
           DATABASE_URL: postgresql://postgres:ci-synthetic-only@127.0.0.1:5432/frontdesk_test
         run: |
           python -c "import os,psycopg; c=psycopg.connect(os.environ['DATABASE_URL'],autocommit=True); c.execute('CREATE ROLE anon'); c.execute('CREATE ROLE authenticated'); c.close()"
-          python -m backend.verify_integration --database-only --apply-pending
-          python -m backend.verify_integration --database-only --apply-pending
+          FRONTDESK_EPHEMERAL_POSTGRES=1 python -m scripts.check_postgres
       - name: Rendered Chromium vehicle workflow with mocked Auth and AI
         run: python scripts/check-browser.py
       - name: Rendered Chromium three-business rehearsal

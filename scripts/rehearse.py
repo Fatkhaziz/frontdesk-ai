@@ -96,12 +96,12 @@ def sample_profile(domain):
     return {
         'name': 'Demo Studio' if studio else 'Demo Salon' if salon else 'Demo Motors', 'domain': domain,
         'about': 'Synthetic rehearsal business. Inquiries go to this business’s staff inbox.',
-        'contact': 'salon@example.invalid' if salon else 'motors@example.invalid',
+        'contact': 'studio@example.invalid' if studio else 'salon@example.invalid' if salon else 'motors@example.invalid',
         'time_zone': 'America/New_York',
         'hours': [{'day': day, 'opens': '10:00' if salon else '09:00', 'closes': '18:00' if salon else '17:00'} for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']],
         'services': [{
             'id': 'portrait-session' if studio else 'haircut' if salon else 'vehicle-service', 'name': 'Portrait session' if studio else 'Haircut consultation' if salon else 'Vehicle service inquiry',
-            'description': 'Staff review your request and arrange the time.', 'duration_minutes': 45 if salon else 30, 'price_cents': 4500 if salon else None,
+            'description': 'Staff review your request and arrange the time.', 'duration_minutes': 60 if studio else 45 if salon else 30, 'price_cents': 4500 if salon else None,
             'questions': [{'id': 'participants' if studio else 'stylist' if salon else 'vehicle', 'label': 'How many participants and which location?' if studio else 'Which stylist would you prefer?' if salon else 'What is the year, make and model of your vehicle?', 'required': True}],
         }],
         'faqs': [{'question': 'What is your cancellation policy?', 'answer': 'For this studio example, contact staff about package changes.' if studio else 'For this salon example, request changes at least 24 hours ahead.' if salon else 'For this dealership example, contact service staff to change your visit.'}],

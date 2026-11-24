@@ -35,6 +35,7 @@ with sync_playwright() as playwright:
     public.get_by_role('button', name='What is your cancellation policy?', exact=True).click()
     public.get_by_role('button', name='Check approved answer').click()
     expect(public.get_by_role('status')).to_contain_text('For this dealership example')
+    expect(public.get_by_text('Exact FAQ matching · no AI call', exact=True)).to_be_visible()
     page.get_by_role('checkbox', name='I reviewed the saved settings').check()
     page.get_by_role('button', name='Publish approved settings').click()
     expect(page.get_by_role('status')).to_contain_text('Approved business settings published')
