@@ -1,0 +1,313 @@
+import json
+import logging
+import os
+import time
+import traceback
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Literal
+import httpx
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+from .db import connect, execute
+from .config import supabase_config, question_mode, ai_enabled
+from .ai import call_ai, now
+from .demo import fields_for_question
+from .errors import error_category
+from .business import create_router, format_inquiry
+
+app = FastAPI(title='FrontDesk AI feasibility demo')
+log = logging.getLogger('frontdesk')
+logging.basicConfig(level=logging.INFO)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request, exc):
+    return JSONResponse({'detail': 'Please check the required fields and enter valid details.'}, status_code=422)
+
+@app.middleware('http')
+async def trace(request: Request, next_handler):
+    rid = str(uuid.uuid4())
+    request.state.request_id = rid
+    start = time.monotonic()
+    try:
+        response = await next_handler(request)
+    except Exception as exc:
+        frames = traceback.extract_tb(exc.__traceback__)
+        origin = frames[-1].name if frames else 'unknown'
+        log.error('request_id=%s error_type=%s category=%s sqlstate=%s origin=%s',
+                  rid, type(exc).__name__, error_category(exc), getattr(exc, 'sqlstate', None), origin)
+        response = JSONResponse({'detail':'Service unavailable; check configuration', 'request_id':rid}, status_code=503)
+    response.headers['X-Request-ID'] = rid
+    response.headers['Cache-Control'] = 'no-store'
+    log.info('request_id=%s method=%s route=%s status=%s duration_ms=%d', rid, request.method, request.scope.get('route').path if request.scope.get('route') else 'unmatched', response.status_code, (time.monotonic()-start)*1000)
+    return response
+
+
+def identity(request: Request):
+    token = request.headers.get('authorization','')
+    if not token.startswith('Bearer '):
+        raise HTTPException(401, 'Sign in required')
+    url, key = supabase_config()
+    if not url or not key:
+        raise HTTPException(503, 'Authentication is not configured')
+    # Supabase Auth validates the token, including expiry and project membership.
+    with httpx.Client(timeout=10) as client:
+        r = client.get(url+'/auth/v1/user', headers={'Authorization':token,'apikey':key})
+    if r.status_code != 200:
+        raise HTTPException(401, 'Invalid or expired sign-in')
+    user = r.json()
+    if not user.get('email_confirmed_at'):
+        raise HTTPException(403, 'Verify your email')
+    with connect() as c:
+        member = execute(c, 'SELECT * FROM memberships WHERE subject=%s AND active=TRUE',(user['id'],)).fetchone()
+    if not member:
+        raise HTTPException(403, 'Ask the administrator to provision your business membership')
+    return dict(member)
+
+
+def owner(member=Depends(identity)):
+    if member['role'] != 'owner':
+        raise HTTPException(403, 'Owner required')
+    return member
+
+app.include_router(create_router(identity, owner))
+
+class Strict(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+class Facts(Strict):
+    make: str = Field(min_length=1,max_length=80)
+    model: str = Field(min_length=1,max_length=80)
+    year: int = Field(ge=1886,le=datetime.now().year + 1)
+    price: int = Field(ge=0,le=1000000000,description='USD cents')
+    mileage: int = Field(ge=0,le=10000000)
+    availability: Literal['available','reserved','sold'] = 'available'
+
+    @field_validator('make', 'model')
+    @classmethod
+    def not_blank(cls, value):
+        if not value.strip():
+            raise ValueError('Enter a make and model')
+        return value.strip()
+
+class Car(Strict):
+    facts: Facts
+    description: str = Field(default='',max_length=3000)
+
+class Edit(Car):
+    expected_revision: int = Field(gt=0)
+
+class Revision(Strict):
+    expected_revision: int = Field(gt=0)
+
+class Approval(Revision):
+    confirm_approval: Literal[True]
+
+class Question(Strict):
+    question: str = Field(min_length=1,max_length=1000)
+
+class Inquiry(Strict):
+    request_key: uuid.UUID
+    contact: str = Field(min_length=3,max_length=300)
+    message: str = Field(min_length=1,max_length=1000)
+
+class Status(Strict):
+    status: Literal['open','pending','resolved']
+
+
+def record(c, lid, member=None, public=False):
+    sql, args = 'SELECT * FROM listings WHERE id=%s', [lid]
+    if member:
+        sql += ' AND business_id=%s'; args.append(member['business_id'])
+    if public:
+        sql += ' AND published IS NOT NULL'
+    row = execute(c, sql, args).fetchone()
+    if not row:
+        raise HTTPException(404, 'Listing not found')
+    return dict(row)
+
+
+def serialize(row):
+    return {**row,'facts':json.loads(row['facts']),'published':json.loads(row['published']) if row['published'] else None}
+
+@app.get('/health')
+def health():
+    return {'status':'running'}
+
+@app.get('/api/config')
+def config():
+    url, key = supabase_config()
+    return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled(), 'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'}
+
+@app.get('/api/listings')
+def listings(m=Depends(identity)):
+    with connect() as c:
+        return [serialize(dict(r)) for r in execute(c,'SELECT l.*, (SELECT MAX(created_at) FROM audit_events a WHERE a.listing_id=l.id AND a.business_id=l.business_id) AS published_at FROM listings l WHERE business_id=%s ORDER BY id',(m['business_id'],)).fetchall()]
+
+@app.post('/api/listings',status_code=201)
+def create(body:Car,m=Depends(identity)):
+    lid = str(uuid.uuid4())
+    with connect() as c:
+        execute(c,'INSERT INTO listings(id,business_id,revision,facts,description) VALUES(%s,%s,1,%s,%s)',(lid,m['business_id'],body.facts.model_dump_json(),body.description))
+        return serialize(record(c,lid,m))
+
+@app.get('/api/listings/{lid}')
+def get_listing(lid:str,m=Depends(identity)):
+    with connect() as c:
+        return serialize(record(c,lid,m))
+
+
+def update_draft(lid,body,m):
+    with connect() as c:
+        record(c,lid,m)
+        r = execute(c,'UPDATE listings SET facts=%s,description=%s,revision=revision+1,approved_revision=NULL,approved_by=NULL WHERE id=%s AND business_id=%s AND revision=%s RETURNING id',(body.facts.model_dump_json(),body.description,lid,m['business_id'],body.expected_revision)).fetchone()
+        if not r: raise HTTPException(409,'Draft changed; reload and review')
+        return serialize(record(c,lid,m))
+
+@app.patch('/api/listings/{lid}')
+def edit(lid:str,body:Edit,m=Depends(identity)):
+    return update_draft(lid,body,m)
+
+@app.post('/api/listings/{lid}/draft')
+def draft(lid:str,body:Revision,m=Depends(identity)):
+    if not ai_enabled():
+        raise HTTPException(503,'AI drafting is disabled. Enter a manual description, save, review and approve it.')
+    with connect() as c: row = record(c,lid,m)
+    if row['revision'] != body.expected_revision: raise HTTPException(409,'Stale revision')
+    try:
+        result = call_ai(m['business_id'],'draft',json.loads(row['facts']),lid)
+        if set(result) != {'description'} or not isinstance(result['description'],str) or not result['description'].strip(): raise ValueError()
+        body2 = Edit(facts=json.loads(row['facts']),description=result['description'],expected_revision=body.expected_revision)
+    except Exception:
+        raise HTTPException(503,'AI draft unavailable; existing draft preserved')
+    return update_draft(lid,body2,m)
+
+@app.delete('/api/listings/{lid}')
+def delete_listing(lid: str, m=Depends(owner)):
+    with connect() as c:
+        # Serialize against publication and child inserts on the actual PostgreSQL parent.
+        suffix = '' if c.__class__.__module__.startswith('sqlite3') else ' FOR UPDATE'
+        row = execute(c, 'SELECT id FROM listings WHERE id=%s AND business_id=%s' + suffix, (lid,m['business_id'])).fetchone()
+        if not row:
+            raise HTTPException(404, 'Listing not found')
+        execute(c, 'DELETE FROM inquiries WHERE listing_id=%s AND business_id=%s', (lid,m['business_id']))
+        execute(c, 'DELETE FROM ai_tasks WHERE business_id=%s AND id IN (SELECT task_id FROM listing_ai_tasks WHERE listing_id=%s AND business_id=%s)', (m['business_id'],lid,m['business_id']))
+        execute(c, 'DELETE FROM audit_events WHERE listing_id=%s AND business_id=%s', (lid,m['business_id']))
+        # Revisions and the public snapshot are columns of this row, not separate tables.
+        execute(c, 'DELETE FROM listings WHERE id=%s AND business_id=%s', (lid,m['business_id']))
+    return {'deleted': True}
+
+@app.post('/api/listings/{lid}/publish')
+def publish(lid:str,body:Approval,m=Depends(owner)):
+    with connect() as c:
+        row = record(c,lid,m)
+        if not row['description'].strip(): raise HTTPException(422,'Review a description before publishing')
+        snapshot = json.dumps({'facts':json.loads(row['facts']),'description':row['description']})
+        r = execute(c,'UPDATE listings SET published=%s,published_revision=revision,approved_revision=revision,approved_by=%s WHERE id=%s AND business_id=%s AND revision=%s RETURNING id',(snapshot,m['subject'],lid,m['business_id'],body.expected_revision)).fetchone()
+        if not r: raise HTTPException(409,'Stale approval; reload and review')
+        if row['published_revision'] != body.expected_revision:
+            execute(c,'INSERT INTO audit_events VALUES(%s,%s,%s,%s,%s,%s,%s)',(str(uuid.uuid4()),m['business_id'],m['subject'],lid,body.expected_revision,'publish',now()))
+    return {'url':'/listing/'+lid,'revision':body.expected_revision}
+
+@app.post('/api/listings/{lid}/unpublish')
+def unpublish(lid:str,m=Depends(owner)):
+    with connect() as c:
+        record(c,lid,m)
+        execute(c,'UPDATE listings SET published=NULL,published_revision=NULL WHERE id=%s',(lid,))
+    return {'unpublished':True}
+
+@app.get('/api/public/{lid}')
+def public(lid:str):
+    with connect() as c: row=record(c,lid,public=True)
+    return {**json.loads(row['published']),'revision':row['published_revision']}
+
+@app.post('/api/public/{lid}/questions')
+def question(lid:str,body:Question):
+    with connect() as c: row=record(c,lid,public=True)
+    mode=question_mode()
+    fallback={'handoff':True,'answer':'I cannot answer that from the approved facts. You can submit an inquiry to staff.','mode':mode}
+    if mode == 'demo':
+        fields=fields_for_question(body.question)
+        if not fields: return fallback
+    else:
+        # Narrow fall-demo scope: ambiguous or mixed input is always handed to staff.
+        # Grok still classifies supported questions, but cannot expand the allowed fields.
+        allowed=fields_for_question(body.question)
+        if not allowed: return fallback
+        try:
+            intent=call_ai(row['business_id'],'question',{'question':body.question},lid)
+            if set(intent) != {'intent','fields'} or intent['intent'] != 'facts' or not isinstance(intent['fields'],list) or not intent['fields'] or any(f not in ('price','mileage') for f in intent['fields']): return fallback
+            if set(intent['fields']) != set(allowed): return fallback
+            fields=intent['fields']
+        except Exception:
+            return fallback
+    # Re-read after the network call; edits and publication may occur during inference.
+    current=public(lid)
+    facts=current['facts']
+    answers={'price':f"The price is ${facts['price']/100:,.2f} USD.",'mileage':f"The mileage is {facts['mileage']:,} miles."}
+    return {'handoff':False,'answer':' '.join(answers[f] for f in dict.fromkeys(fields)),'revision':current['revision'],'mode':mode}
+
+@app.post('/api/public/{lid}/inquiries',status_code=201)
+def inquiry(lid:str,body:Inquiry):
+    with connect() as c:
+        row=record(c,lid,public=True)
+        existing=execute(c,'SELECT * FROM inquiries WHERE business_id=%s AND request_key=%s',(row['business_id'],str(body.request_key))).fetchone()
+        if existing:
+            if existing['listing_id'] != lid or existing['message'] != body.message or existing['contact'] != body.contact: raise HTTPException(409,'Request key already used')
+            return {'id':existing['id'],'status':existing['status']}
+        iid=str(uuid.uuid4())
+        execute(c,'INSERT INTO inquiries VALUES(%s,%s,%s,%s,%s,%s,%s,%s)',(iid,row['business_id'],lid,str(body.request_key),body.contact,body.message,'open',now()))
+    return {'id':iid,'status':'open'}
+
+@app.get('/api/inquiries')
+def inbox(m=Depends(identity)):
+    with connect() as c:
+        rows=execute(c,'SELECT i.*,l.facts FROM inquiries i JOIN listings l ON l.id=i.listing_id AND l.business_id=i.business_id WHERE i.business_id=%s ORDER BY i.created_at DESC,i.id DESC',(m['business_id'],)).fetchall()
+        vehicles = [{**dict(r),'kind':'listing','vehicle_name': ' '.join(str(json.loads(r['facts'])[k]) for k in ('year','make','model'))} for r in rows]
+        services = [format_inquiry(r) for r in execute(c, 'SELECT * FROM business_inquiries WHERE business_id=%s', (m['business_id'],)).fetchall()]
+        return sorted(vehicles + services, key=lambda row: (row['created_at'], row['id']), reverse=True)
+
+@app.patch('/api/inquiries/{iid}')
+def inquiry_status(iid:str,body:Status,m=Depends(identity)):
+    with connect() as c:
+        r=execute(c,'UPDATE inquiries SET status=%s WHERE id=%s AND business_id=%s RETURNING id',(body.status,iid,m['business_id'])).fetchone()
+        if not r: raise HTTPException(404,'Inquiry not found')
+    return {'status':body.status}
+
+@app.get('/api/diagnostics')
+def diagnostics(m=Depends(owner)):
+    with connect() as c:
+        execute(c,'SELECT 1').fetchone()
+        last=execute(c,'SELECT model,kind,status,duration_ms,result,usage,created_at FROM ai_tasks WHERE business_id=%s ORDER BY created_at DESC LIMIT 1',(m['business_id'],)).fetchone()
+        success=execute(c,"SELECT model,kind,usage,created_at FROM ai_tasks WHERE business_id=%s AND status='succeeded' AND kind!='business_question' ORDER BY created_at DESC LIMIT 1",(m['business_id'],)).fetchone()
+        draft_task=execute(c,"SELECT status FROM ai_tasks WHERE business_id=%s AND kind='draft' ORDER BY created_at DESC LIMIT 1",(m['business_id'],)).fetchone()
+        calls=execute(c,'SELECT calls FROM ai_budget WHERE id=1').fetchone()['calls']
+        evidence=execute(c,'SELECT e.*,t.model,t.created_at FROM ai_interaction_evidence e JOIN ai_tasks t ON t.id=e.task_id AND t.business_id=e.business_id WHERE e.business_id=%s ORDER BY t.created_at DESC LIMIT 1',(m['business_id'],)).fetchone()
+    # Reaching this owner route already required a successful Supabase Auth user check.
+    rehearsal = os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'
+    auth='simulated' if rehearsal else 'ready'
+    limit=int(os.getenv('AI_CALL_LIMIT','10'))
+    return {'auth':auth,'database':'isolated rehearsal' if rehearsal else 'connected','backend':'running','question_mode':question_mode(),'ai_enabled':ai_enabled(),
+            'drafting': 'last request failed' if draft_task and draft_task['status']=='failed' else ('ready' if ai_enabled() and calls<limit else 'unavailable'),
+            'ai_calls_used':calls,'ai_call_limit':limit,'last_successful_ai_request':dict(success) if success else None,
+            'last_actual_ai_request':dict(last) if last else None, 'last_business_qa_evidence':dict(evidence) if evidence else None}
+
+@app.get('/api/ai/evidence')
+def ai_evidence(m=Depends(owner)):
+    with connect() as c:
+        rows = execute(c, 'SELECT e.*,t.kind,t.model,t.created_at FROM ai_interaction_evidence e JOIN ai_tasks t ON t.id=e.task_id AND t.business_id=e.business_id WHERE e.business_id=%s ORDER BY t.created_at DESC LIMIT 50', (m['business_id'],)).fetchall()
+    return [{**dict(r), **{k: json.loads(r[k]) if r[k] is not None else None for k in ('approved_sources','selected_sources','token_usage')}} for r in rows]
+
+assets=Path(__file__).resolve().parent.parent/'frontend/dist'
+if (assets/'assets').exists(): app.mount('/assets',StaticFiles(directory=assets/'assets'),name='assets')
+@app.get('/')
+@app.get('/listing/{lid}')
+@app.get('/business/{lid}')
+def frontend(lid:str=''):
+    if not (assets/'index.html').exists(): raise HTTPException(503,'Build frontend first')
+    return FileResponse(assets/'index.html')
