@@ -23,7 +23,7 @@ Definitions: [`001_demo.sql`](../migrations/001_demo.sql), [`002_listing_ai_task
 | `public.schema_migrations` | `name` PK, `sha256`; created by migration runner. No timestamp. Tracks immutable migration contents. |
 | `auth.users` (Supabase managed) | Auth service owns `id`, email/confirmation, password hash and other identity state. Application reads only the authenticated `/auth/v1/user` response (`id`, `email_confirmed_at`), not the SQL table or password hash. Managed Auth also owns its session/token tables; this application does not define or query those tables. |
 
-The implementation uses `public` and Supabase-managed `auth`. Storage, realtime, extensions and other provider/system schemas are not application persistence contracts. A complete live project schema inventory is **not yet verified** because DNS blocks database access. There are no application storage buckets, photo uploads, scheduling, payment or voice tables.
+The implementation uses `public` and Supabase-managed `auth`. Storage, realtime, extensions and other provider/system schemas are not application persistence contracts. The user confirmed the live integration command succeeded in ordinary Mac Terminal: all four migrations are recorded, the application table/column checks passed and 13 foreign keys were inspected. This verifies the live application schema contract; it is not an exhaustive audit of every provider-managed system table. There are no application storage buckets, photo uploads, scheduling, payment or voice tables.
 
 Migrations revoke all application-table privileges from `anon` and `authenticated`. The browser uses FastAPI rather than PostgREST for application records. These migrations do **not** enable RLS or define a restricted backend database role: tenant predicates and dependencies are enforced by the backend. Database credentials remain server-only.
 
@@ -49,6 +49,7 @@ All routes are implemented in [backend/main.py](https://github.com/Fatkhaziz/fro
 | HTTP tracing / errors | `trace`, `validation_error`, [errors.py](../backend/errors.py) `error_category` | Middleware / validation handler on every route; no standalone endpoint |
 | Connectivity/migration verification | [verify_integration.py](../backend/verify_integration.py) `check_auth`, `inspect_database`, `schema_contract`, `snapshot_rows`; [migrate.py](../backend/migrate.py) `migrate`; [check_connection.py](../backend/check_connection.py) `check` | CLI only, no HTTP administrative migration endpoint |
 | Disposable PostgreSQL integration | [check_postgres.py](../scripts/check_postgres.py) `main` | CLI only; explicit ephemeral marker and loopback DB required; upgrades legacy fixtures, verifies three business paths with mocked Auth/Grok and no live Supabase data |
+| Real setup launcher / private inspection | [run-real-setup.sh](../scripts/run-real-setup.sh); [inspect_live_setup.py](../scripts/inspect_live_setup.py) `main`, `inspect` | Uses the existing real configuration and real Auth; process-only paid-AI pause; read-only setup queries, actual public GET checks and anonymous private-route checks; no migrations, seeding or identity overrides |
 | Safe rehearsal | [rehearse.py](../scripts/rehearse.py) `main`, `rehearsal_identity`, `rehearsal_login`, `sample_profile` | Process-only `POST /rehearsal-auth/auth/v1/token`; loopback port 8002; synthetic accounts/SQLite, paid AI disabled |
 | Optional live check | [verify_live_qa.py](../scripts/verify_live_qa.py) `main`, `estimate_cost` | CLI; default database-only preflight; explicit paid flag + interactive confirmation invokes one public question endpoint via in-process TestClient |
 
@@ -111,29 +112,78 @@ Crash/DB failure after network completion can leave a started/pending row; there
 
 ## Environment and migration verification
 
-`config.database_options()` keeps an existing configured certificate path. If that path is missing, it accepts only the same basename inside this checkout's `.certs`, refuses a resolved path outside that directory and parses the PEM through `ssl.create_default_context`. The file, `.env` and `sslmode=verify-full` are unchanged. `db.connect` and the local preflight use these options. The stale path blocker is resolved. Offline checks also found matching DB/Auth project references and a non-expired local CA; they do not prove a successful TLS handshake. Network DNS still fails for Supabase, npm and GitHub in the local runtime.
+`config.database_options()` keeps an existing configured certificate path. If that path is missing, it accepts only the same basename inside this checkout's `.certs`, refuses a resolved path outside that directory and parses the PEM through `ssl.create_default_context`. The file, `.env` and `sslmode=verify-full` are unchanged. `db.connect` and the local preflight use these options. The stale path blocker is resolved. Offline checks also found matching DB/Auth project references and a non-expired local CA; they do not prove a successful TLS handshake. The managed command runner still has connectivity restrictions; ordinary Mac Terminal has now successfully reached the real services. These are separate execution environments.
 
 `python -m backend.verify_integration --apply-pending` checks Auth settings and rejection of an invalid bearer, then independently reviews database migration checksums and snapshots existing application rows privately. `migrate()` takes a PostgreSQL advisory transaction lock, refuses changed checksums/untracked initial schema, applies pending SQL atomically and records hashes. Post-checks compare every contract table/column, inspect FK definitions, require no anon/authenticated application grants and verify pre-existing row digests/counts and budget unchanged. No row data, digest, connection string or credentials are printed. `--database-only` is explicitly for isolated PostgreSQL CI, not evidence of Supabase Auth.
 
-Real probes attempted with existing private configuration: CA resolves and verify-full remains; cap remains 10; Auth `ConnectError`, PostgreSQL `OperationalError` due unavailable DNS. The migration runner was **not reached**, no live schema/data changes occurred, and live tables/columns/migration state/used attempts remain unverified. The optional Supabase integration was discovered but remains uninstalled/unconnected; installing and connecting it is another possible access path. No verified owner password or usable access token was supplied; even a successful settings probe would not prove real sign-in/role behavior.
+### Successful live checks supplied by the user
+
+The integration command succeeded in ordinary Mac Terminal using the existing private configuration. The user confirmed:
+
+- Supabase Auth settings were reachable and an invalid bearer was rejected.
+- Real PostgreSQL connected; migrations `003_business_reception.sql` and `004_ai_interaction_evidence.sql` applied, with all four migrations recorded.
+- The application schema checks inspected 13 foreign keys; existing application rows were unchanged.
+- The AI attempt counter is **9 used / 10 total: one remaining**.
+
+These are successful **live-service checks**, not rehearsal or mocked evidence. They were reported by the user; no completed migration or automated suite was rerun for this continuation. The earlier agent-side DNS failures remain historical environment evidence, not the current status of ordinary Mac Terminal. Existing historical AI requests have not acquired new metadata merely because migration 004 was applied.
+
+### Real application startup and private setup inspection
+
+`scripts/run-real-setup.sh` sources the existing `.env` without displaying it, requires the preserved cap of 10, unsets rehearsal/testing markers, and disables drafting plus clears the provider key **only in the launched process**. It does not edit `.env`, certificates or database records. PostgreSQL, Supabase Auth and the `identity()` path remain real; there are no injected identities or SQLite fallback. The existing question mode is retained. During this pause, a business AI question returns a provider-unavailable error rather than silently becoming a Grok or rehearsal answer; no budget reservation can occur without a key.
+
+After starting `backend.local`, the launcher calls `inspect_live_setup.inspect()`. It uses read-only transactions to inspect business/profile domains and private/published revisions, active owner/staff membership counts and, where permitted, Auth-user existence/email-confirmation flags. It never reads password hashes, tokens, email addresses, inquiry contacts or messages. No private profile content is printed or copied to the report. A mode-0600 temporary JSON report retains only business IDs, setup metadata and route-check results.
+
+The inspector makes actual HTTP GET requests to the dashboard/config, existing published business/listing routes and five anonymous protected routes. Public payloads must match their database snapshots; protected routes must reject anonymous access. It verifies the attempt count remains 9/10 before and after. It calls no question/drafting endpoint, creates no inquiry, runs no migration and writes no business or membership data. Anonymous rejection and Auth settings reachability do **not** prove a real owner sign-in.
+
+The managed command-runner launch failed its PostgreSQL preflight, and desktop control of Terminal was rejected by the computer-use safety policy. The subsequent ordinary-Terminal handoff succeeded using:
+
+```sh
+cd '/Users/fatkhazizmukhamedov/Desktop/Gannon/7th semester/Senior Design/frontdesk-ai'
+bash scripts/run-real-setup.sh
+```
+
+**Running real application: http://127.0.0.1:8000/**. A private mode-0600 report from the ordinary-Terminal launcher was inspected without exposing IDs, credentials or business content in this reference. It confirmed:
+
+| Live check | Observed result |
+| --- | --- |
+| Existing business records | 1 |
+| Saved business profiles / published business profiles | 0 / 0 |
+| Active confirmed owner memberships | 1 |
+| Active staff memberships | 0 |
+| Existing published listing GETs compared with database snapshots | 2 matched |
+| Anonymous protected routes | All 5 returned 401 |
+| Published dealership/salon/studio profile coverage | 0 / 0 / 0 |
+| Attempt counter before and after the read-only checks | 9/10; one remains |
+
+No existing business/profile/membership data was changed. No inquiry, source or AI task was created. The visible settings form is an unsaved example, not a persisted approved profile.
+
+### Verified current sign-in and remaining business setup
+
+Safari was observed at the real owner dashboard with no rehearsal marker. Its owner-only **System status** route showed Supabase Auth **Ready**, PostgreSQL **Connected**, backend **Running**, drafting **Unavailable** and **9 used / 10 total**. Given the setup process has no testing markers or identity override, this is evidence of the current real Supabase token, confirmed-email and active owner-membership path succeeding. No password was entered or inspected by the agent. The current business has no new business Q&A evidence; historical vehicle usage is displayed separately.
+
+The current tab is already signed in; another login is not required there. After refreshing or signing out, enter the existing confirmed owner's credentials only at **http://127.0.0.1:8000/**. Passwords stay out of chat. Salon/studio owner identities and cross-business real sign-ins are not yet provisioned or verified. Rehearsal credentials do not authenticate to the real project.
+
+The private report establishes that only the existing business/owner is provisioned and no business profile has been saved. The existing dealership workspace needs its first factual profile. Salon and studio require separate business records, approved business information and authorized confirmed owners; the mere presence of the three example buttons does not establish that setup. Missing profiles need the actual business's contact, hours, services, intake questions and approved policy text. New real salon/studio business identities and authorized owners must be identified before provisioning. A subject currently has only one membership, so assigning it to a different business would overwrite access; this continuation does not do that. Fictional rehearsal data must not be published as real business information. Existing profiles, public revisions, memberships and contacts are not overwritten, and unknown facts are left for owner review.
+
+The current owner sign-in is now verified; the last paid attempt remains reserved until the missing factual profile setup and any required additional owner sign-ins have been completed. The setup server keeps paid AI paused; deliberate verification uses the separately gated CLI below after current balance and remaining budget checks. No automatic query or retry is authorized.
 
 ## Verification record
 
 - Local backend: **43 tests passed**, synthetic SQLite and injected/mocked Auth/Grok, including three domains, tenant isolation, revision conflicts, explicit inquiry retries, source forgery, stale results, injection, failure paths, CA relocation and live-cost gate.
 - Local frontend: strict TypeScript/Vite production build and three domain tests passed after restoring cached build dependencies with the repository lockfile unchanged. Full local interaction tests remain blocked by the uncached `xmlchars` package and registry DNS; complete interaction tests run in CI instead.
-- Local rendered browser: unavailable browser access host and denied loopback bind; no successful local rendered run claimed.
-- Remote verification: [workflow source](../.github/workflows/fall-release-1.yml) uses only the public repository's standard Ubuntu runner, no secrets or live provider configuration, pinned actions, mock/SQLite tests, complete frontend tests, production build, disposable PostgreSQL 16 migrations and actual headless Chromium workflows. The disposable PostgreSQL check validates all contract tables/columns, 13 foreign keys, denied browser grants, preserved synthetic legacy rows and three business inquiry/evidence paths. The [successful verification run](https://github.com/Fatkhaziz/frontdesk-ai/actions/runs/45359723183) tested implementation commit `e41a3941f6a38a639ac4ab3a0600fc97068b8c31`: **43 backend tests, 6 frontend tests, strict production build, PostgreSQL migration/integration smoke checks, and both rendered Chromium workflows passed**. Subsequent changes to this reference and README are documentation only; the workflow deliberately skips documentation-only pushes. This is application integration evidence, not live Supabase/Grok verification.
+- Live rendered Safari: the real owner dashboard, missing saved profile and owner-only System status were observed. This verifies the current owner session and real database-backed status, not salon/studio sessions or Grok inference. Earlier browser-host/loopback restrictions and the Terminal desktop-control denial are historical/agent-specific limitations.
+- Remote verification: [workflow source](../.github/workflows/fall-release-1.yml) uses only the public repository's standard Ubuntu runner, no secrets or live provider configuration, pinned actions, mock/SQLite tests, complete frontend tests, production build, disposable PostgreSQL 16 migrations and actual headless Chromium workflows. The disposable PostgreSQL check validates all contract tables/columns, 13 foreign keys, denied browser grants, preserved synthetic legacy rows and three business inquiry/evidence paths. The [successful verification run](https://github.com/Fatkhaziz/frontdesk-ai/actions/runs/45359723183) tested implementation commit `e41a3941f6a38a639ac4ab3a0600fc97068b8c31`: **43 backend tests, 6 frontend tests, strict production build, PostgreSQL migration/integration smoke checks, and both rendered Chromium workflows passed**. That CI result covers the committed application implementation. This continuation adds an ordinary-Terminal setup launcher/read-only inspector and updates the reference; only new-script syntax checks were run, without repeating completed suites or migrations. This CI is application integration evidence. The separate live Supabase checks and observed current owner session are recorded above. Additional real owner/staff/tenant sign-ins and Grok remain unverified.
 - `.env`, certificate contents, existing records and configured cap are preserved; the private-file hash comparison is local and its values are not published. No paid calls, purchases, limit increases, database resets or live record deletions were performed.
 
 ## User-initiated Grok check still required
 
-After live connectivity/migrations and publication of a real business profile are verified, privately load the existing `.env` and run:
+Live connectivity/migrations are user-confirmed and the current real owner session is observed. Before using the final attempt, save/review/publish a factual business profile containing the actual approved cancellation-policy answer, then confirm the intended owner/business session and privately load the existing `.env` and run:
 
 ```sh
 .venv/bin/python -m scripts.verify_live_qa --business ACTUAL_BUSINESS_ID
 ```
 
-Default behavior is read-only database preflight, without provider access. The one paid action is:
+Default behavior is read-only database preflight, without provider access. There is currently only **one attempt remaining (9/10 used)**. The following deliberate action must wait until factual business setup/publication is complete and the intended real owner/business session is confirmed:
 
 ```sh
 .venv/bin/python -m scripts.verify_live_qa \
