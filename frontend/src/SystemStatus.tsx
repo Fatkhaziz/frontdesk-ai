@@ -194,6 +194,13 @@ export default function SystemStatus({ api }: { api: Api }) {
                         </div>
                       ))}
                     </dl>
+                    {r.application_outcome !== "accepted" && (
+                      <p className="notice">
+                        {r.rejection
+                          ? `Rejected at ${r.rejection.stage}: ${r.rejection.reason}${r.rejection.field ? ` · field ${r.rejection.field}` : ""}${r.rejection.source_id ? ` · source ${r.rejection.source_id}` : ""}`
+                          : "Specific rejection diagnostics were not recorded for this request."}
+                      </p>
+                    )}
                     <details>
                       <summary>Published source evidence</summary>
                       <p>{r.source_ids?.length ?? 0} cited source references</p>

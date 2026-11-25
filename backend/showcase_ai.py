@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from .ai import now
 from .config import question_mode
 from .db import connect, execute
+from .ai_rejection import Rejection
 
 
 def provider_call(instruction, payload):
@@ -52,10 +53,14 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
                 (task, business, request_id, operation, json.dumps(sources), 'started', 'pending'))
     started = time.monotonic()
     provider, application, provider_id, provider_model, usage, refs = 'failed', 'provider_error', None, None, {}, []
+    stage, diagnostic = 'provider', None
     try:
         body = provider_call(instruction, payload)
         provider = 'succeeded'
         application = 'invalid_output'
+        stage = 'envelope'
+        if not isinstance(body, dict):
+            raise Rejection(stage, 'invalid_envelope')
         raw_id = body.get('id')
         if isinstance(raw_id, str) and re.fullmatch(r'[\w.-]{1,200}', raw_id) and raw_id != key and not re.search(r'bearer|password|secret|xai-|sk-', raw_id, re.I):
             provider_id = raw_id
@@ -65,24 +70,56 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
         raw_usage = body.get('usage') or {}
         if isinstance(raw_usage, dict):
             usage = {k: v for k, v in raw_usage.items() if k in ('prompt_tokens', 'completion_tokens', 'total_tokens') and type(v) is int and v >= 0}
-        choice = body['choices'][0]
+        choices = body.get('choices')
+        if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
+            raise Rejection(stage, 'invalid_envelope')
+        choice = choices[0]
         if choice.get('finish_reason') != 'stop':
-            raise ValueError('incomplete_output')
-        result = validate(json.loads(choice['message']['content']))
+            raise Rejection(stage, 'incomplete_output')
+        message = choice.get('message')
+        if not isinstance(message, dict) or not isinstance(message.get('content'), str):
+            raise Rejection(stage, 'invalid_envelope')
+        stage = 'json'
+        # Reject duplicate JSON keys and non-finite numbers rather than silently
+        # accepting whichever value a permissive decoder happens to retain.
+        def unique_pairs(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise Rejection('json', 'invalid_json')
+                result[key] = value
+            return result
+        def invalid_constant(value):
+            raise Rejection('json', 'invalid_json')
+        decoded = json.loads(message['content'], object_pairs_hook=unique_pairs, parse_constant=invalid_constant)
+        stage = 'shape'
+        result = validate(decoded)
         refs = result.get('source_ids', [])
         application = 'stale_source'
+        stage = 'publication'
         if not still_current():
-            raise ValueError('stale_source')
+            raise Rejection(stage, 'stale_source')
         application = 'accepted'
         return {**result, 'task_id': task, 'request_id': request_id, 'mode': 'live_ai'}
-    except Exception:
+    except Exception as exc:
+        if isinstance(exc, Rejection):
+            diagnostic = exc.diagnostic(sources)
+        elif isinstance(exc, json.JSONDecodeError):
+            diagnostic = Rejection('json', 'invalid_json').diagnostic(sources)
+        elif isinstance(exc, httpx.TimeoutException):
+            diagnostic = Rejection('provider', 'provider_timeout').diagnostic(sources)
+        elif isinstance(exc, httpx.HTTPStatusError):
+            reason = 'provider_rate_limit' if exc.response.status_code == 429 else 'provider_http_error'
+            diagnostic = Rejection('provider', reason).diagnostic(sources)
+        else:
+            diagnostic = Rejection(stage, 'provider_error' if stage == 'provider' else 'internal_error').diagnostic(sources)
         if application == 'stale_source':
             raise HTTPException(409, 'Published information changed during the request. Refresh the inventory before trying again.') from None
         raise HTTPException(503, 'The AI response could not be accepted. No facts were changed. You can compare the published facts or contact staff.') from None
     finally:
         elapsed = int((time.monotonic() - started) * 1000)
         with connect() as c:
-            execute(c, 'UPDATE ai_tasks SET model=%s,status=%s,duration_ms=%s,usage=%s WHERE id=%s AND business_id=%s',
-                    (provider_model or model, provider, elapsed, json.dumps({**usage, 'provider_response_id': provider_id, 'requested_model': model, 'provider_model': provider_model}), task, business))
+            execute(c, 'UPDATE ai_tasks SET model=%s,status=%s,duration_ms=%s,usage=%s,result=%s WHERE id=%s AND business_id=%s',
+                    (provider_model or model, provider, elapsed, json.dumps({**usage, 'provider_response_id': provider_id, 'requested_model': model, 'provider_model': provider_model}), json.dumps({'rejection': diagnostic}) if diagnostic else None, task, business))
             execute(c, 'UPDATE assistant_runs SET source_ids=%s,provider_response_id=%s,token_usage=%s,latency_ms=%s,provider_outcome=%s,application_outcome=%s WHERE task_id=%s AND business_id=%s',
                     (json.dumps(refs if application == 'accepted' else []), provider_id, json.dumps(usage), elapsed, provider, application, task, business))

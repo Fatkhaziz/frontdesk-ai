@@ -9,6 +9,7 @@ const {createElement:h,act}=await import('react');
 const {createRoot}=await import('react-dom/client');
 const {default:PublicShop}=await import('../src/PublicShop.tsx');
 const {default:KnowledgeSetup}=await import('../src/KnowledgeSetup.tsx');
+const {default:SystemStatus}=await import('../src/SystemStatus.tsx');
 const root=createRoot(document.getElementById('root'));
 const prefs={budget_cents:null,budget_kind:'unknown',min_seats:null,max_mileage:null,body_style:'any',fuel_type:'any',drivetrain:'any',priorities:[],required_features:[]};
 const inventory={name:'Test Motors',knowledge:[],listings:[{id:'a',revision:1,facts:{make:'Example',model:'A',year:2022,price:2350000,mileage:42000,availability:'available'},description:'Synthetic'},{id:'b',revision:1,facts:{make:'Example',model:'B',year:2022,price:2650000,mileage:38000,availability:'available'},description:'Synthetic'}]};
@@ -27,6 +28,19 @@ test('inventory and navigation never make an automatic paid request',async()=>{
  assert.equal(document.querySelectorAll('.inventory-card').length,0);
  await click(button('Inventory'));assert.equal(document.querySelectorAll('.inventory-card').length,2);
  assert.equal(calls.length,1);
+});
+
+test('system status shows bounded rejection diagnostics and honestly marks older evidence',async()=>{
+ const calls=[];
+ const api=async(path)=>{calls.push(path);return path==='/diagnostics'
+  ? {auth:'ready',database:'connected',drafting:'ready',question_mode:'ai',backend:'running',ai_calls_used:12,ai_call_limit:17}
+  : [{task_id:'new',operation:'shopping_assistant',application_outcome:'invalid_output',provider_outcome:'succeeded',rejection:{stage:'claims',reason:'unsupported_number',field:'answer',source_id:null}},
+     {task_id:'old',operation:'shopping_assistant',application_outcome:'invalid_output',provider_outcome:'succeeded',rejection:null}];};
+ await act(async()=>root.render(h(SystemStatus,{key:'rejections',api})));
+ assert.match(document.body.textContent,/12 used \/ 17 total/);
+ assert.match(document.body.textContent,/Rejected at claims: unsupported_number · field answer/);
+ assert.match(document.body.textContent,/Specific rejection diagnostics were not recorded for this request/);
+ assert.deepEqual(calls.sort(),['/assistant/evidence','/diagnostics']);
 });
 
 test('multi-turn AI preferences persist and send is explicit',async()=>{
