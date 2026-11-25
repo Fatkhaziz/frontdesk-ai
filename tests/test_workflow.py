@@ -20,6 +20,7 @@ class Workflow(unittest.TestCase):
    c.executescript(Path('migrations/002_listing_ai_tasks.sql').read_text().split('REVOKE')[0]+'COMMIT;')
    c.executescript(Path('migrations/003_business_reception.sql').read_text().split('REVOKE')[0]+'COMMIT;')
    c.executescript(Path('migrations/004_ai_interaction_evidence.sql').read_text().split('REVOKE')[0]+'COMMIT;')
+   c.executescript(Path('migrations/005_shopping_assistant.sql').read_text().split('REVOKE')[0]+'COMMIT;')
    for b in ['a','b']: execute(c,'INSERT INTO businesses VALUES(%s,%s)',(b,b))
   self.member={'subject':'owner-a','business_id':'a','role':'owner'}
   app.dependency_overrides[identity]=lambda:self.member
@@ -105,7 +106,7 @@ class Workflow(unittest.TestCase):
   app.dependency_overrides.clear()
   public=self.client.get('/api/public/'+lid)
   self.assertEqual(public.status_code,200)
-  self.assertEqual(set(public.json()),{'facts','description','revision'})
+  self.assertEqual(set(public.json()),{'facts','description','revision','shop_url'})
   self.assertEqual(self.client.get('/api/listings/'+lid).status_code,401)
 
  def test_provider_draft_uses_dollars_and_records_evidence(self):

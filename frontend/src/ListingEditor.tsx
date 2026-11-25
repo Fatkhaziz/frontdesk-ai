@@ -17,10 +17,11 @@ export default function ListingEditor({ stage, setStage, car, api, run, busy, ai
     const [facts, setFacts] = useState<Facts>(car?.facts || blank);
     const [price, setPrice] = useState(String((car?.facts.price ?? blank.price) / 100));
     const [description, setDescription] = useState(car?.description || '');
+    const [featureText,setFeatureText]=useState((car?.facts.features || []).join(', '));
     const [approved, setApproved] = useState(false), [generating, setGenerating] = useState(false);
-    const dirty = !car || JSON.stringify(facts) !== JSON.stringify(car.facts) || price !== String(car.facts.price / 100) || description !== car.description;
+    const dirty = !car || JSON.stringify(facts) !== JSON.stringify(car.facts) || price !== String(car.facts.price / 100) || description !== car.description || featureText !== (car.facts.features || []).join(', ');
     function update(key: string, value: string) { setFacts({ ...facts, [key]: ['year', 'mileage'].includes(key) ? (value === '' ? NaN : Number(value)) : value }); setApproved(false); }
-    function currentFacts() { const next = { ...facts, make: facts.make.trim(), model: facts.model.trim(), price: dollarsToCents(price) }; validateFacts(next); return next; }
+    function currentFacts() { const next = { ...facts, make: facts.make.trim(), model: facts.model.trim(), price: dollarsToCents(price), features:featureText.split(',').map(v=>v.trim()).filter(Boolean) }; validateFacts(next); return next; }
     async function saveDraft(updateSelection = true) {
         const next = currentFacts();
         if (car && !dirty)
@@ -42,6 +43,9 @@ export default function ListingEditor({ stage, setStage, car, api, run, busy, ai
     <label>Price (USD)<input aria-label="Price (USD)" inputMode="decimal" value={price} onChange={e => { setPrice(e.target.value); setApproved(false); }} aria-describedby="price-help"/><small id="price-help">For example, 23500 means $23,500.</small></label>
     <label>Mileage (miles)<input type="number" min={0} max={10000000} step={1} value={Number.isNaN(facts.mileage) ? '' : facts.mileage} onChange={e => update('mileage', e.target.value)}/></label>
     <label>Availability<select value={facts.availability} onChange={e => update('availability', e.target.value)}>{['available', 'reserved', 'sold'].map(v => <option key={v}>{v}</option>)}</select></label>
+    {([['body_style', 'Body style', ['sedan','suv','hatchback','truck','coupe','wagon','van']], ['fuel_type','Fuel type',['gasoline','diesel','hybrid','electric','plug_in_hybrid']], ['drivetrain','Drivetrain',['fwd','rwd','awd','4wd']], ['transmission','Transmission',['automatic','manual']]] as const).map(([key,label,options]) => <label key={key}>{label}<select value={facts[key] || ''} onChange={e => { setFacts({...facts,[key]:e.target.value || null}); setApproved(false); }}><option value="">Not provided</option>{options.map(v => <option key={v} value={v}>{v.replaceAll('_',' ').toUpperCase()}</option>)}</select></label>)}
+    {([['seats','Seats',1,15],['mpg_combined','Documented combined MPG',1,150],['cargo_cubic_feet','Cargo space (cubic feet)',1,500]] as const).map(([key,label,min,max]) => <label key={key}>{label}<input type="number" min={min} max={max} step={key === 'seats' ? 1 : 'any'} value={facts[key] ?? ''} onChange={e => {setFacts({...facts,[key]:e.target.value === '' ? null : Number(e.target.value)});setApproved(false);}}/><small>Leave blank when unknown. Enter documented values only.</small></label>)}
+    <label className="full-width">Documented features<input value={featureText} placeholder="For example: heated seats, rear camera" maxLength={1000} onChange={e => {setFeatureText(e.target.value);setApproved(false);}}/><small>Comma-separated. These facts become available for comparison only after publication.</small></label>
    </div>
    <button disabled={busy} onClick={() => run(async () => { await saveDraft(); setStage(2); notify('Private draft saved. Review its saved revision before publishing.'); })}>Save vehicle details</button>
   </section>

@@ -38,7 +38,7 @@ def main():
         raise RuntimeError('Configured model differs from the priced model. Stop and review current pricing; do not change model automatically.')
     with connect() as c:
         # Refuse missing/modified migrations before any provider call.
-        for filename in ['003_business_reception.sql', '004_ai_interaction_evidence.sql']:
+        for filename in ['003_business_reception.sql', '004_ai_interaction_evidence.sql', '005_shopping_assistant.sql']:
             row = execute(c, 'SELECT sha256 FROM schema_migrations WHERE name=%s', (filename,)).fetchone()
             expected = hashlib.sha256(Path('migrations', filename).read_bytes()).hexdigest()
             if not row or row['sha256'] != expected:

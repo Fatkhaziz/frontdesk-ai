@@ -1,7 +1,7 @@
 name: Fall Release 1 verification
 on:
   pull_request:
-    branches: [feat/feasibility-demo]
+    branches: [main, feat/feasibility-demo]
     paths-ignore: ['docs/**', 'README.md']
 permissions:
   contents: read
@@ -58,6 +58,8 @@ jobs:
           FRONTDESK_EPHEMERAL_POSTGRES=1 python -m scripts.check_postgres
       - name: Rendered Chromium vehicle workflow with mocked Auth and AI
         run: python scripts/check-browser.py
+      - name: Rendered dealership showcase with mocked Auth and AI
+        run: python scripts/check-showcase-browser.py
       - name: Rendered Chromium three-business rehearsal
         run: |
           python -m scripts.rehearse >/tmp/rehearsal.log 2>&1 &

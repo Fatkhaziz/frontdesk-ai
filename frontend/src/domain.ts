@@ -7,6 +7,15 @@ export type Facts = {
     price: number;
     mileage: number;
     availability: string;
+    body_style?: string | null;
+    fuel_type?: string | null;
+    drivetrain?: string | null;
+    transmission?: string | null;
+    seats?: number | null;
+    mpg_combined?: number | null;
+    cargo_cubic_feet?: number | null;
+    features?: string[];
+    synthetic?: boolean;
 };
 export type Car = {
     id: string;
