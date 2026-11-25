@@ -23,6 +23,47 @@ Frontend fixes preserve selected IDs in Find my fit and separate inquiry activit
 
 This is the current fall scope following the November 24 discussion with Dr. Matovu. Demonstrate concrete AI use in one dealership: owner knowledge preparation, customer preference discovery, and explained vehicle comparison. The platform remains for small businesses. Additional business-domain completion is final-system work; existing salon/studio code is retained, not removed.
 
+## Presentation readiness follow-up — allowance proposed, not applied
+
+The authenticated xAI billing dashboard now displays **$4.99 prepaid credit** (the provider UI's cents-level display), one original $5 purchase and auto top-up disabled. This is a fresh billing read, not a balance inferred from the attempt counter. The current global short-context price for the configured `grok-4.20-0309-non-reasoning` remains $1.25/M input tokens and $2.50/M output tokens; see [official pricing](https://docs.x.ai/developers/pricing). No purchase, billing-setting change or paid inference was made in this follow-up.
+
+| Setting / bound | Current | Proposed only after explicit approval |
+| --- | --- | --- |
+| Private `.env` `AI_CALL_LIMIT` | `10` | `13` |
+| Historical `public.ai_budget.calls` | `10` | Retain `10`; increment normally for each new attempt |
+| Additional attempts | None available | At most three, shared across all AI actions, including failures |
+| Conservative input/output bound | 48,000-byte payload + system instruction + 4,096 framing-token allowance; 1,800 output tokens | Same bounds; same model/global endpoint; no tools or automatic retries |
+| Conservative additional cost | No new inference charge in this follow-up | $0.07294625/request × 3 = **$0.21883875**; round reserve up to **$0.22** |
+| Total spending authorization | Original $5 | Unchanged; existing prepaid credit only |
+
+Exact proposed configuration diff (credentials and every other line remain private and unchanged):
+
+```diff
+-AI_CALL_LIMIT=10
++AI_CALL_LIMIT=13
+```
+
+This proposal does not reset/delete the counter, tasks, source snapshots, inquiries or prior response IDs. All three attempts are reserved for deliberate presentation actions; none are to be consumed by an automatic verification/retry loop. An unsuccessful attempt still uses an attempt. The estimate assumes the checked standard global model rates and enforced request bounds; provider billing is authoritative.
+
+**Activation is not applied:** `run-local.sh` loads `.env` into the process environment at startup; `run_ai()` reads `os.getenv('AI_CALL_LIMIT')`. The existing server has no runtime limit-update endpoint. Merely editing the file will leave the running process at 10. A controlled restart needs separate explicit approval before activation; the current server is left running. No server restart is authorized by this proposed diff alone.
+
+### Unpaid browser evidence from the running application
+
+- A new customer tab loaded the PR #4 bundle `index-4HDC96Ic.js`. With the Compact Hatch and City Hybrid selected, **Find my fit** submitted both correct `selected_ids` in its actual HTTP JSON payload. Safari Web Inspector showed the server response **429** with the configured-limit message. This confirms the post-fix browser payload/cap path, not a new Grok completion. The request fails before budget reservation/provider access; it does not add an AI task or replace the existing successful run.
+- The real backend comparison returned $4,600 for those two examples and $6,000 after adding Utility AWD. Missing MPG/cargo remained “Not provided”. No AI action was used for either calculation.
+- Safari Responsive Design Mode at **390×844** rendered the real local site: shopping navigation, collapsed/expandable requirements, chat controls, inventory and two-/three-vehicle comparison layouts. The comparison table is contained in its horizontal scroll region. This is browser viewport verification, not a physical iPhone test.
+- The durable prior Grok run/model/IDs/usage remain the evidence listed above. The currently available browser initially contained the owner dashboard but no open customer-chat tab. Chat text is page memory and is not durably stored; do not claim that the original transcript can be reopened from the evidence record or replace it with a generated/mock response.
+- A fresh owner knowledge request and inbox refresh returned **Invalid or expired sign-in**. Previously verified public r2/private r3 and the Pending synthetic inquiry are historical live results until private reauthentication permits a fresh read. The current frontend disables automatic token refresh, so sign in shortly before presenting; a cached dashboard is not proof of a current authenticated route. No owner data was edited or republished during this follow-up.
+- The earlier 62-backend/11-frontend/Chromium suites used mocked Auth/Grok. They are not evidence for a newly paid response, a renewed owner session or physical mobile behavior. No completed setup, migration, dependency installation or test suite was repeated for this documentation-only follow-up.
+
+### Short presentation sequence
+
+1. Privately sign in just before presenting. In **Owner knowledge**, show public revision 2 beside saved private revision 3; explain that only reviewed answers are published. Do not publish the private review note. Owner AI generation is still unverified live.
+2. Open **Listings → Open customer inventory**. Identify the four fictional examples. Select Compact Hatch + City Hybrid, click **Compare selected**, then add Utility AWD to show $4,600/$6,000 price differences and missing specifications. These are live database-backed calculations, without AI inference.
+3. In **System status → Latest showcase AI requests → Published source evidence**, show the previously verified shopping response, its timestamp, six revision-specific citations, model, matching request/task/provider IDs and separate outcomes. State that it is a previous real Grok run. Show that current 10/10 prevents new live questions; do not present a mock or the capped error as Grok output.
+4. After private reauthentication, use **Inquiries → Refresh inquiries**, expand the labeled synthetic consultation and show its recorded preferences, two published vehicle revisions and persisted Pending status. Customer contact is a separately consented inquiry, not AI evidence.
+5. Only if the proposed allowance and its activation are approved: use one attempt for owner question suggestions, one for a meaningful selected-vehicle **Find my fit** request, and the final attempt for one follow-up/change of requirements. Keep the resulting customer tab open. A separate AI-comparison or fair-price request would need to replace that third action, not silently add a fourth. Do not claim any action succeeded until its real response and saved outcome are inspected. Stop at 13 total attempts; no automatic retry, top-up or purchase.
+
 ## Acceptance scope
 
 | Capability | Acceptance evidence |
@@ -70,7 +111,7 @@ Before the sole live request, the xAI dashboard showed $5.00 rounded credit, one
 
 1. **Owner knowledge.** Show the saved private revision 3 beside published revision 2. The factual fictional-example explanation was manually answered, explicitly approved, saved, reviewed and published. The later private note is absent from the public response. Do not publish the private test wording or click the unverified paid question-suggestion action at the exhausted cap.
 2. **Inventory.** Open `/shop/demo-dealer`. Four of the six published vehicles are clearly marked fictional examples, not real sale offers.
-3. **Find my fit.** Use the existing customer browser tab to show the real response and extracted $25,000 vehicle-price budget, five seats and fuel-economy priority. The chat is page memory and disappears on refresh; durable API evidence remains in System status. Do not send again at 10/10.
+3. **Find my fit.** Use the existing customer browser tab to show the real response and extracted $25,000 vehicle-price budget, five seats and fuel-economy priority. The chat is page memory and disappears on refresh/closing the tab; durable API evidence remains in System status. The original customer tab was no longer open at the presentation-readiness follow-up, so use the saved run as historical evidence rather than claiming its transcript is still available. Do not send again at 10/10.
 4. **Follow-up.** Point to the actual question about higher fuel economy versus lower price/larger cargo. A second AI turn and changed-requirement interpretation were not live verified; manual preference edits are not an AI turn.
 5. **Compare.** Select the Compact Hatch/City Hybrid for a $4,600 difference, or add Utility AWD for a $6,000 range. Show missing MPG/cargo for Utility AWD. These are calculated backend results and make no AI request. The separate AI explanation button remains unverified live.
 6. **Limits.** Show the actual response's missing-cost/condition/history disclosures. A fair-market-price response was not tested live; no external market evidence is available.
@@ -184,7 +225,7 @@ The merged implementation's previous CI passed 60 backend tests, 9 frontend test
 - Additive migration 005 was applied once in the existing Supabase dashboard under the advisory lock, after reviewing 001–004 checksums. Its exact checksum, table/column contracts, 19 foreign keys and zero anon/authenticated grants on new tables were verified. The same four deterministic fictional examples as `seed_showcase.py` were added. A single transaction required every pre-existing row across 12 application tables to remain unchanged or roll back. No migration/dependency setup was repeated in this browser continuation.
 - The earlier managed-runner DNS/loopback restriction and Terminal-control rejection blocked automated startup during PR #3. The user subsequently started the real server in ordinary Mac Terminal. The current live sign-in/browser/database results above supersede that earlier startup/login blocker. The server and real customer-response tab were left running.
 - The real response cited price/seats/MPG. Its body-style/cargo facts existed in the approved catalog snapshot but were not all included in its six cited field IDs. Numeric catalog checks and source-ID ownership are not a complete claim-to-citation proof; prose relevance, completeness and general semantic correctness still require review. Prompts do not guarantee correctness.
-- Live owner AI generation, additional conversation turns, the separate AI-comparison action and fair-price questions remain blocked by 10/10. The selected-ID fix and inquiry activity separation are covered by automated regressions; no second paid post-fix AI check was attempted. Current listing edit/delete and mobile workflows have rendered mocked-service regression coverage, not new real-data verification. No existing listing was edited/deleted for this check.
+- Live owner AI generation, additional conversation turns, the separate AI-comparison action and fair-price questions remain blocked by 10/10. The selected-ID fix and inquiry activity separation are covered by automated regressions. A later unpaid capped HTTP request also confirmed the selected-ID payload; no second paid post-fix AI check was attempted. Current listing edit/delete and owner mobile workflows have rendered mocked-service regression coverage, not new real-data verification. Public shopping mobile layout was subsequently inspected against the real site at 390×844 in Safari Responsive Design Mode. No existing listing was edited/deleted for this check.
 
 The running dashboard is **http://127.0.0.1:8000/** and inventory is **http://127.0.0.1:8000/shop/demo-dealer**. Keep the user's existing server terminal open. For a later restart after it is stopped, run `bash scripts/run-local.sh` from the configured checkout. No new download, credentials reset, database reset or Codex session is required. A full dashboard refresh requires private sign-in again because the current frontend keeps the Auth session in memory.
 
