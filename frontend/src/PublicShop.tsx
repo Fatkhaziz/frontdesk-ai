@@ -58,9 +58,11 @@ function fact(f: Facts, key: keyof Facts) {
       ? money(Number(v))
       : Array.isArray(v)
         ? v.join(", ")
-        : typeof v === "number"
-          ? v.toLocaleString()
-          : String(v).replaceAll("_", " ").toUpperCase();
+        : key === "year"
+          ? String(v)
+          : typeof v === "number"
+            ? v.toLocaleString()
+            : String(v).replaceAll("_", " ").toUpperCase();
 }
 type Message = {
   question: string;
@@ -98,6 +100,9 @@ export default function PublicShop({
     [comparison, setComparison] = useState<any>(null),
     [recommended, setRecommended] = useState<string[]>([]),
     [matches, setMatches] = useState<string[] | null>(null);
+  const [preferencesOpen, setPreferencesOpen] = useState(
+    window.innerWidth > 720,
+  );
   const [contact, setContact] = useState(""),
     [summary, setSummary] = useState(""),
     [consent, setConsent] = useState(false),
@@ -112,8 +117,14 @@ export default function PublicShop({
       .catch((e) => setError(e.message));
   }, [id]);
   useEffect(() => {
-    chatEnd.current?.scrollIntoView({ block: "nearest" });
+    const container = chatEnd.current?.parentElement;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages, busy]);
+  useEffect(() => {
+    const resize = () => setPreferencesOpen(window.innerWidth > 720);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
   async function work(fn: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true;
@@ -205,7 +216,24 @@ export default function PublicShop({
       );
       setRecommended(r.recommended_ids);
       setMatches(r.matches);
-      setComparison(null);
+      if (tab === "Compare" && selected.length >= 2) {
+        const refreshed = await api("/shop/" + id + "/compare", "POST", {
+          listing_ids: selected,
+          preferences: r.preferences,
+        });
+        setComparison(refreshed);
+        setData((d) =>
+          d
+            ? {
+                ...d,
+                listings: d.listings.map(
+                  (l) =>
+                    refreshed.listings.find((v: Vehicle) => v.id === l.id) || l,
+                ),
+              }
+            : d,
+        );
+      } else setComparison(null);
       setMessages((ms) => [
         ...ms,
         {
@@ -291,156 +319,185 @@ export default function PublicShop({
       )}
       <div className="shop-layout">
         <aside className="preference-panel">
-          <p className="eyebrow">Your requirements</p>
-          <h2>What matters to you?</h2>
-          <p className="muted">
-            Chat can fill these in. You can also change them yourself.
-          </p>
-          <label>
-            Maximum budget (USD)
-            <input
-              inputMode="decimal"
-              value={budget}
-              placeholder="For example: 25000"
-              onChange={(e) => setBudget(e.target.value)}
-              onBlur={() => {
-                try {
-                  updatePrefs({
-                    budget_cents: budget.trim() ? dollarsToCents(budget) : null,
-                  });
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            />
-          </label>
-          <label>
-            Budget includes
-            <select
-              value={preferences.budget_kind}
-              onChange={(e) => updatePrefs({ budget_kind: e.target.value })}
-            >
-              <option value="unknown">Not sure yet</option>
-              <option value="vehicle">Vehicle price only</option>
-              <option value="total">
-                Everything, including taxes and fees
-              </option>
-            </select>
-          </label>
-          <label>
-            Minimum seats
-            <input
-              type="number"
-              min={1}
-              max={15}
-              value={preferences.min_seats ?? ""}
-              onChange={(e) =>
-                updatePrefs({
-                  min_seats: e.target.value ? Number(e.target.value) : null,
-                })
-              }
-            />
-          </label>
-          <label>
-            Maximum mileage
-            <input
-              type="number"
-              min={0}
-              max={10000000}
-              value={preferences.max_mileage ?? ""}
-              onChange={(e) =>
-                updatePrefs({
-                  max_mileage: e.target.value ? Number(e.target.value) : null,
-                })
-              }
-            />
-          </label>
-          {(
-            [
-              [
-                "body_style",
-                "Body style",
-                ["sedan", "suv", "hatchback", "truck", "coupe", "wagon", "van"],
-              ],
-              [
-                "fuel_type",
-                "Fuel type",
-                ["gasoline", "diesel", "hybrid", "electric", "plug_in_hybrid"],
-              ],
-              ["drivetrain", "Drivetrain", ["fwd", "rwd", "awd", "4wd"]],
-            ] as const
-          ).map(([key, label, values]) => (
-            <label key={key}>
-              {label}
-              <select
-                value={preferences[key]}
-                onChange={(e) => updatePrefs({ [key]: e.target.value })}
-              >
-                <option value="any">Any / undecided</option>
-                {values.map((v) => (
-                  <option value={v} key={v}>
-                    {v.replaceAll("_", " ").toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-          <label>
-            Must-have features
-            <input
-              value={featuresText}
-              maxLength={400}
-              placeholder="For example: heated seats"
-              onChange={(e) => setFeaturesText(e.target.value)}
-              onBlur={() =>
-                updatePrefs({
-                  required_features: featuresText
-                    .split(",")
-                    .map((v) => v.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
-            <small>Use the listed feature names, separated by commas.</small>
-          </label>
-          <fieldset className="priorities">
-            <legend>Priorities (preferences, not guarantees)</legend>
-            {["price", "mileage", "space", "fuel_economy"].map((p) => (
-              <label className="checkbox" key={p}>
+          <details
+            open={preferencesOpen}
+            onToggle={(e) => setPreferencesOpen(e.currentTarget.open)}
+          >
+            <summary className="preference-summary">
+              <span className="eyebrow">Your requirements</span>
+              <strong>What matters to you?</strong>
+            </summary>
+            <div className="preference-fields">
+              <p className="muted">
+                Chat can fill these in. You can also change them yourself.
+              </p>
+              <label>
+                Maximum budget (USD)
                 <input
-                  type="checkbox"
-                  checked={preferences.priorities.includes(p)}
+                  inputMode="decimal"
+                  value={budget}
+                  placeholder="For example: 25000"
+                  onChange={(e) => setBudget(e.target.value)}
+                  onBlur={() => {
+                    try {
+                      updatePrefs({
+                        budget_cents: budget.trim()
+                          ? dollarsToCents(budget)
+                          : null,
+                      });
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                />
+              </label>
+              <label>
+                Budget includes
+                <select
+                  value={preferences.budget_kind}
+                  onChange={(e) => updatePrefs({ budget_kind: e.target.value })}
+                >
+                  <option value="unknown">Not sure yet</option>
+                  <option value="vehicle">Vehicle price only</option>
+                  <option value="total">
+                    Everything, including taxes and fees
+                  </option>
+                </select>
+              </label>
+              <label>
+                Minimum seats
+                <input
+                  type="number"
+                  min={1}
+                  max={15}
+                  value={preferences.min_seats ?? ""}
                   onChange={(e) =>
                     updatePrefs({
-                      priorities: e.target.checked
-                        ? [...preferences.priorities, p]
-                        : preferences.priorities.filter((v) => v !== p),
+                      min_seats: e.target.value ? Number(e.target.value) : null,
                     })
                   }
                 />
-                {p.replaceAll("_", " ")}
               </label>
-            ))}
-          </fieldset>
-          <button
-            disabled={busy}
-            onClick={() => {
-              setPreferences(defaults);
-              setBudget("");
-              setFeaturesText("");
-              setMessages([]);
-              setRecommended([]);
-              setMatches(null);
-              setComparison(null);
-              setNotice("Started a new consultation.");
-            }}
-          >
-            Start over
-          </button>
-          <p className="privacy">
-            Preferences stay in this page until you submit them to staff. AI
-            messages go to xAI. Keep contact details out of chat.
-          </p>
+              <label>
+                Maximum mileage
+                <input
+                  type="number"
+                  min={0}
+                  max={10000000}
+                  value={preferences.max_mileage ?? ""}
+                  onChange={(e) =>
+                    updatePrefs({
+                      max_mileage: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    })
+                  }
+                />
+              </label>
+              {(
+                [
+                  [
+                    "body_style",
+                    "Body style",
+                    [
+                      "sedan",
+                      "suv",
+                      "hatchback",
+                      "truck",
+                      "coupe",
+                      "wagon",
+                      "van",
+                    ],
+                  ],
+                  [
+                    "fuel_type",
+                    "Fuel type",
+                    [
+                      "gasoline",
+                      "diesel",
+                      "hybrid",
+                      "electric",
+                      "plug_in_hybrid",
+                    ],
+                  ],
+                  ["drivetrain", "Drivetrain", ["fwd", "rwd", "awd", "4wd"]],
+                ] as const
+              ).map(([key, label, values]) => (
+                <label key={key}>
+                  {label}
+                  <select
+                    value={preferences[key]}
+                    onChange={(e) => updatePrefs({ [key]: e.target.value })}
+                  >
+                    <option value="any">Any / undecided</option>
+                    {values.map((v) => (
+                      <option value={v} key={v}>
+                        {v.replaceAll("_", " ").toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <label>
+                Must-have features
+                <input
+                  value={featuresText}
+                  maxLength={400}
+                  placeholder="For example: heated seats"
+                  onChange={(e) => setFeaturesText(e.target.value)}
+                  onBlur={() =>
+                    updatePrefs({
+                      required_features: featuresText
+                        .split(",")
+                        .map((v) => v.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+                <small>
+                  Use the listed feature names, separated by commas.
+                </small>
+              </label>
+              <fieldset className="priorities">
+                <legend>Priorities (preferences, not guarantees)</legend>
+                {["price", "mileage", "space", "fuel_economy"].map((p) => (
+                  <label className="checkbox" key={p}>
+                    <input
+                      type="checkbox"
+                      checked={preferences.priorities.includes(p)}
+                      onChange={(e) =>
+                        updatePrefs({
+                          priorities: e.target.checked
+                            ? [...preferences.priorities, p]
+                            : preferences.priorities.filter((v) => v !== p),
+                        })
+                      }
+                    />
+                    {p.replaceAll("_", " ")}
+                  </label>
+                ))}
+              </fieldset>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setPreferences(defaults);
+                  setBudget("");
+                  setFeaturesText("");
+                  setMessages([]);
+                  setRecommended([]);
+                  setMatches(null);
+                  setComparison(null);
+                  setNotice("Started a new consultation.");
+                }}
+              >
+                Start over
+              </button>
+              <p className="privacy">
+                Preferences stay in this page until you submit them to staff. AI
+                messages go to xAI. Keep contact details out of chat.
+              </p>
+            </div>
+          </details>
         </aside>
         <div className="shop-main">
           {tab === "Inventory" && (

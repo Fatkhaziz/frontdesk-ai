@@ -1228,3 +1228,43 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+.preference-summary {
+  cursor: pointer;
+  list-style: revert;
+  padding-bottom: 0.7rem;
+}
+.preference-summary .eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  margin-bottom: 0.5rem;
+}
+.preference-summary strong {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+.preference-fields {
+  margin-top: 0.8rem;
+}
+.preference-fields > .muted,
+.preference-fields > .privacy {
+  font-size: 0.8rem;
+}
+@media (max-width: 720px) {
+  .preference-panel {
+    display: block;
+  }
+  .preference-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 1rem;
+  }
+  .preference-fields > .muted,
+  .preference-fields > .privacy,
+  .preference-fields > fieldset,
+  .preference-fields > button {
+    grid-column: 1/-1;
+  }
+  .preference-summary strong {
+    font-size: 1.1rem;
+  }
+}
