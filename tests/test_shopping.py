@@ -172,6 +172,32 @@ class Shopping(unittest.TestCase):
         self.assertEqual(r.status_code,503)
         self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['reason'],'unsupported_number')
 
+    def test_valid_specification_difference_is_not_an_invented_number(self):
+        from backend.shopping import validate_answer, ShoppingQuestion
+        data=catalog('a')
+        next(l for l in data['listings'] if l['id']==self.ids[1])['facts']['mpg_combined']=32
+        sources=source_list(data)
+        refs=[s['id'] for s in sources if s['id'].endswith(':mpg_combined')]
+        result=self.result(answer='Published combined MPG values are 45 and 32, a difference of 13 MPG. This is not a total ownership-cost estimate.',source_ids=refs)
+        body=ShoppingQuestion(message='Compare published fuel economy',selected_ids=self.ids)
+        validate_answer(result,data,body,sources)
+        derived=next(s for s in sources if s['id'].endswith(':mpg_combined_difference'))
+        self.assertEqual(set(derived['inputs']),set(refs))
+        with self.assertRaises(ValueError):
+            validate_answer({**result,'answer':'The difference is 14 MPG.'},data,body,sources)
+        with self.assertRaises(ValueError):
+            validate_answer({**result,'answer':'The price difference is $13.'},data,body,sources)
+
+    def test_inline_citation_digits_are_not_factual_claims(self):
+        result=self.result()
+        identity=result['source_ids'][0]
+        for citation in [f'[{identity}]','[1]']:
+            r=self.ask({**result,'answer':f'The listed price is $23,500 {citation}.'})
+            self.assertEqual(r.status_code,200,r.text)
+        for citation in ['[listing:foreign:r1:price]','[99]']:
+            self.assertEqual(self.ask({**result,'answer':f'The listed price is $23,500 {citation}.'}).status_code,503)
+            self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['reason'],'unapproved_source')
+
     def test_budget_followup_preserves_seats_priority_and_selection(self):
         old={**Preferences().model_dump(),'budget_cents':2500000,'budget_kind':'vehicle','min_seats':5,'priorities':['fuel_economy']}
         new={**old,'budget_cents':3000000}
