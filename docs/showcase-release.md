@@ -85,6 +85,9 @@ Open the owner dashboard and the customer inventory in two browser tabs. Prepare
 | Supabase table | Stored information |
 | --- | --- |
 | `auth.users` | Managed login identity. `encrypted_password` stores a salted bcrypt hash, not a readable password. |
+| `public.businesses` | Business ID/name; parent of memberships, listings, knowledge, inquiry and evidence scopes. |
+| `public.business_profiles` / `public.business_profile_events` | Existing private/published business configuration and publication audit; retained for the earlier receptionist path. |
+| `public.audit_events` / `public.listing_ai_tasks` | Listing publication/deletion audit and earlier listing/task association. Audit actors are not foreign keys to Auth. |
 | `public.memberships` | Auth subject, business, owner/staff role and active state. It is not a password table. |
 | `public.listings` | Private vehicle facts/description, revisions, approval and published snapshot. Extended facts remain JSON text. |
 | `public.dealer_knowledge` | Private question/answer cards and the separately published owner-reviewed snapshot. |
@@ -96,6 +99,28 @@ Open the owner dashboard and the customer inventory in two browser tabs. Prepare
 | `public.inquiries` / `public.business_inquiries` | Earlier vehicle/service request flows, retained. |
 | `public.ai_budget` | Shared lifetime attempt count. Not a provider dollar balance. |
 | `public.schema_migrations` | Applied migration filenames and SHA-256 checksums. |
+
+### Schema and route details
+
+The [baseline technical reference](fall-release-1.md#database-contract) describes migrations 001–004 and the full Supabase authentication path. Migration [005](../migrations/005_shopping_assistant.sql) adds these `public` contracts; snapshots and token metadata are JSON encoded in `TEXT`, and timestamps/IDs remain text:
+
+| Table | Important columns and links |
+| --- | --- |
+| `dealer_knowledge` | `business_id` PK/FK → businesses; private `revision/cards`; separate `published/published_revision`; `approved_by` Auth subject by convention, without Auth FK. Published revision cannot exceed private revision. |
+| `knowledge_events` | `id` PK; `business_id` FK → businesses; `actor`, `revision`, `action`, `created_at`. No HTTP/task/actor FK or separate historical full snapshot. |
+| `assistant_runs` | `task_id` PK/FK → ai_tasks with cascade; composite `(task_id,business_id)` FK enforces tenant/task ownership; `business_id` FK → businesses. Records `request_id`, `operation`, `source_snapshot`, `source_ids`, `provider_response_id`, `token_usage`, `latency_ms`, `provider_outcome`, `application_outcome`. No durable HTTP-request FK. |
+| `shopping_inquiries` | `id` PK; `business_id` FK → businesses; unique `(business_id,request_key)`; `contact`, `message`, JSON-text `context` (preferences/published selected vehicles), `status`, `created_at`. No AI-task/request FK or notification-delivery record. |
+
+All following handlers are in [shopping.py](../backend/shopping.py). Public routes use only published business-scoped snapshots. Owner routes reuse `identity()` → Supabase `/auth/v1/user` → confirmed user → active membership → `owner()` role check; staff inquiry status uses the same identity/membership check without the owner requirement. No browser role directly queries these PostgreSQL tables.
+
+| Feature/function | HTTP endpoint |
+| --- | --- |
+| `public_inventory`, `compare`, `assist` | `GET /api/shop/{business_id}`; `POST /api/shop/{business_id}/compare`; `POST /api/shop/{business_id}/assist` |
+| `get_knowledge`, `save_knowledge`, `publish_knowledge`, `suggest` (owner) | `GET/PUT /api/dealer/knowledge`; `POST /api/dealer/knowledge/publish`; `POST /api/dealer/knowledge/suggest` |
+| `submit_followup`, `update_followup` | Public `POST /api/shop/{business_id}/inquiries` (explicit consent required); member `PATCH /api/shopping/inquiries/{id}` |
+| `evidence` (owner); combined inbox in `main.inbox` | `GET /api/assistant/evidence`; `GET /api/inquiries` |
+
+`PublicShop` sends published inventory, customer message/history, preferences and selected IDs to `assist`. The server validates input and source ownership, atomically reserves one budget attempt and writes `ai_tasks` plus `assistant_runs` before `run_ai` calls xAI. It parses a normal stop/JSON completion; `validate_answer()` checks exact fields/types, allowed source IDs, recommendations/hard constraints, explicit preference changes, numerical evidence and selected unsupported guarantees. A fresh catalog comparison rejects stale publication results. It records transport/provider success separately from accepted/invalid/stale application results; errors remain visible. These bounded checks do not prove all prose claims or semantic correctness. Owner suggestions validate question-only structure and reject stale owner/catalog revisions; they do not supply approved answers. There is no automatic retry or inquiry creation.
 
 HTTP logs contain request ID, route, status and duration in the app process console. The new AI table stores the matching request ID durably. Raw customer chat and raw provider output are not retained as evidence. Shopping inquiries and showcase evidence retain submitted/published snapshots when an individual listing is deleted; no automatic retention purge is implemented. Inputs/outputs still travel to xAI for inference; public business data is not private merely because its evidence is owner-only.
 
@@ -140,7 +165,7 @@ The merged implementation's previous CI passed 60 backend tests, 9 frontend test
 ### Configured Mac verification and remaining blocks
 
 - Latest `main` (`59ac213859808ab38ec8dc6d3aba27c1f9ac7862`) was fetched through the GitHub connector and its Git objects hash-verified after shell DNS failed. The old branch was preserved. No `AGENTS.md` was present in the ancestors or current repository tree.
-- The existing Mac Python is 3.9.6. New showcase nullable model annotations failed import there. They now use equivalent `Optional` annotations; **62 local backend regressions pass** with isolated SQLite/mocked providers, and the **production TypeScript/Vite build passes**. Two new checks cover returned-model evidence versus requested aliases. Full local frontend tests remain blocked by unavailable cached test dependencies; the PR must pass the complete CI suite, including added Python 3.9 coverage.
+- The existing Mac Python is 3.9.6. New showcase nullable model annotations failed import there. They now use equivalent `Optional` annotations; **62 local backend regressions pass** with isolated SQLite/mocked providers, and the **production TypeScript/Vite build passes**. Two new checks cover returned-model evidence versus requested aliases. Full local frontend tests remain blocked by unavailable cached test dependencies; the complete [maintenance CI suite](https://github.com/Fatkhaziz/frontdesk-ai/actions/runs/45528060342) passed: 62 backend tests on both Python 3.9 and 3.12, nine frontend interaction tests, the strict production build, disposable PostgreSQL checks and all three rendered Chromium workflows (mocked Auth/Grok).
 - `scripts/setup-showcase.sh --with-examples` was inspected and invoked. Its pinned Python requirements were already installed; npm failed in the restricted command runner. Cached build dependencies were restored without changing the lockfile, and the build succeeded.
 - An existing signed-in Supabase dashboard session matched the configured project. Through its SQL editor, migration 005 was applied under the same advisory lock, after verifying checksums for 001–004. A single transaction recorded 005's exact checksum and added the same four deterministic fictional examples as `seed_showcase.py`. Hash-set checks across all 12 pre-existing application tables required every old row to remain present and unchanged or the transaction would roll back. No actual policies or knowledge answers were invented/published.
 - Live verification after commit: 005 checksum matched; four new table/column contracts were inspected; **19 foreign keys**, **zero anon/authenticated grants** on the new tables, **one confirmed active owner**, **four fictional published examples / six published vehicles total**, **zero showcase AI runs**, and **9/10 attempts used**. Existing users/memberships and records were preserved. No old request was backfilled into `assistant_runs`.
