@@ -160,7 +160,9 @@ def health():
 @app.get('/api/config')
 def config():
     url, key = supabase_config()
-    return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled(), 'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'}
+    return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled(),
+            'shoppingAiEnabled':question_mode() == 'ai' and bool(os.getenv('XAI_API_KEY') and os.getenv('XAI_MODEL')),
+            'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'}
 
 @app.get('/api/listings')
 def listings(m=Depends(identity)):

@@ -2,13 +2,18 @@
 
 FrontDesk AI is an AI receptionist platform for small businesses. The [November 19 requirements](docs/requirements.md) and [aligned detailed design](docs/detailed-design.md) address the professors' annotated feedback, including multiple business domains, business-specific rules, four roles and dealership operations. [Implementation work and evidence](docs/professor-feedback-implementation.md) describe the gaps between that specification and the current code. Earlier Word/PDF snapshots in this folder are historical design references.
 
-## Fall feasibility prototype
+## Current fall showcase
 
-Fall Release 1 adds shared **Business settings**, published business Q&A and explicit service inquiries for a dealership, salon and photography studio. See the current [Release 1 handoff](docs/fall-release-1.md) for the schema, endpoint/function map, authentication and AI paths, current test evidence, limitations and user-initiated cost-gated live check. Each business configures its own hours, services, required intake questions and FAQ answers. Owners save privately and approve a saved revision before publication. Staff can handle their business's inquiries. The original vehicle/Grok demo remains available for dealerships. See [fall progress and practice instructions](docs/fall-progress.md) for current evidence and the separate rehearsal launcher.
+Following the November 24 faculty discussion, the 20% showcase focuses on a dealership with concrete AI use: **owner question suggestions and knowledge preparation**, **conversational customer preferences**, and **personalized vehicle comparison**. The final product remains a small-business platform. Existing salon/studio configuration code is retained for later development.
 
-React/TypeScript and FastAPI serve one application; Supabase provides PostgreSQL and Auth, and xAI provides server-side Grok drafting and bounded question classification. This demo covers structured vehicle facts → private AI draft → owner approval of a saved revision → public listing → approved-fact answers → staff inquiry handoff. Spring bookings, events, billing, photos, and other extensions are outside this preparation.
+Start with the [current release guide](docs/showcase-release.md). It includes one-command Mac setup, the exact presentation sequence, code/database maps, API/password evidence and real-service verification limits. Earlier handoffs and Word snapshots describe prior scope and are historical where they conflict with that guide.
 
-See [the presentation handoff](docs/local-demo-handoff.md) for exact Safari clicks, live verification results, retained records and duplicate cleanup. Original requirements/design documents remain in [docs](docs/).
+```sh
+# In the existing configured Mac checkout, after pulling the release:
+bash scripts/setup-showcase.sh --with-examples
+```
+
+The owner dashboard has **Listings**, **Owner knowledge**, **Inquiries** and **System status**. **Open customer inventory** opens `/shop/{business_id}` with Inventory, Find my fit and Compare. Four explicitly fictional vehicles can be added without overwriting existing rows. AI actions are explicit; browsing/comparison/status checks do not call xAI. Keep the existing total $5 authorization and shared attempt cap under review; setup does not reset or raise it.
 
 ## Local configuration
 
@@ -20,12 +25,12 @@ Use a local `.env` copied from `.env.example`; never commit credentials. `.env`,
 | `SUPABASE_URL` | Project HTTPS URL. `VITE_SUPABASE_URL` is accepted as a fallback. |
 | `SUPABASE_PUBLISHABLE_KEY` | Public publishable or legacy anon key. Never a service-role/secret key. `VITE_SUPABASE_PUBLISHABLE_KEY` is a fallback. |
 | `XAI_API_KEY` | Backend-only funded xAI key. |
-| `XAI_MODEL` | Exact text-model ID in the account's authenticated `GET /v1/models` catalog. Checked before inference. |
-| `QUESTION_MODE` | `demo`: honestly labeled Scripted fallback; `ai`: Grok classifies supported price/mileage questions. Unknown/mixed questions always offer handoff. |
+| `XAI_MODEL` | Exact available text-model ID. Legacy drafting checks the catalog; showcase requests use the configured model and fail safely if unavailable. |
+| `QUESTION_MODE` | `demo`: AI disabled for the showcase; `ai`: enables explicit shopping and owner-question AI requests when provider settings exist. Legacy vehicle Q&A remains narrower. |
 | `DRAFT_AI_ENABLED` | `1` enables paid listing drafts, `0` disables them. If omitted, follows question mode. |
 | `AI_CALL_LIMIT` | Hard project-wide lifetime attempt cap, including failed attempts. Local demo: 10. Not a dollar-balance meter. |
 
-Do not place xAI/database secrets in a `VITE_` variable. The verified local model is `grok-4.20-0309-non-reasoning`. Each inference has a 200-token output cap and no automatic retry. Only vehicle facts or a supported question are sent to xAI; inquiry contacts are never sent.
+Do not place xAI/database secrets in a `VITE_` variable. The verified local model is `grok-4.20-0309-non-reasoning`. Legacy vehicle inference has a 200-token output cap; new showcase inference has an 1,800-token output cap and a 48,000-byte payload bound. No automatic retry. The customer explicitly sends conversation context/preferences to xAI; staff inquiry contacts are kept out of AI payloads. The input filter rejects common credential/contact patterns but is not a universal personal-data detector.
 
 ## Database setup
 
@@ -38,7 +43,7 @@ python -m backend.migrate
 python -m backend.check_connection
 ```
 
-Migrations are atomic, serialized, and checksum-tracked. An existing manually created untracked schema is refused for review; do not recreate/reset it. `001_demo.sql` defines the existing data; additive `002_listing_ai_tasks.sql` links new AI requests to listings for safe deletion. Migrations 001 and 002 were applied in the earlier Supabase demo. Additive `003_business_reception.sql` creates business profiles, service inquiries and publication events; `004_ai_interaction_evidence.sql` adds provenance for new business Q&A attempts. Apply pending migrations before starting this updated application. This continuation has not applied 003 or 004 to the live project. Provision the business/membership using parameterized administration or the Supabase SQL editor with the actual confirmed Auth UUID. Browser database roles have no application-table grants.
+Migrations are atomic, serialized, and checksum-tracked. An existing manually created untracked schema is refused for review; do not recreate/reset it. `001_demo.sql` defines the existing data; additive `002_listing_ai_tasks.sql` links new AI requests to listings for safe deletion. Migrations 001 and 002 were applied in the earlier Supabase demo. Additive `003_business_reception.sql` creates business profiles, service inquiries and publication events; `004_ai_interaction_evidence.sql` adds provenance for new business Q&A attempts. Apply pending migrations before starting this updated application. Migrations 003/004 were verified on the configured Mac on November 24. New `005_shopping_assistant.sql` adds reviewed owner knowledge, publication events, shopping inquiries and correlated showcase AI runs; apply it before starting this release. This workspace has not applied 005 to live Supabase. Provision the business/membership using parameterized administration or the Supabase SQL editor with the actual confirmed Auth UUID. Browser database roles have no application-table grants.
 
 ## Build and run
 
@@ -53,7 +58,7 @@ npm run build --prefix frontend
 bash scripts/run-local.sh
 ```
 
-The launcher loads the project's `.env`, verifies the CA path and TLS mode, checks PostgreSQL, then serves http://127.0.0.1:8000/. Stop the existing server before restarting. Rebuild after frontend changes; restart after backend/environment changes. The current demo is left running detached, with safe logs at `/private/tmp/frontdesk-ai-local.log`.
+The launcher loads the project's `.env`, verifies the CA path and TLS mode, checks PostgreSQL, then serves http://127.0.0.1:8000/. Stop the existing server before restarting. Rebuild after frontend changes; restart after backend/environment changes. Do not assume an earlier detached server is current. Stop the old process and run the setup/start command from the current checkout.
 
 ## Interface and publication
 

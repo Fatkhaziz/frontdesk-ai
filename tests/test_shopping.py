@@ -165,6 +165,41 @@ class Shopping(unittest.TestCase):
                 self.assertEqual(self.client.post('/api/shop/a/assist',json={'message':q}).status_code,422)
             provider.assert_not_called()
 
+    def test_required_features_and_old_constraints_cannot_disappear(self):
+        prefs={**Preferences().model_dump(),'budget_cents':2500000,'budget_kind':'vehicle','required_features':['Heated seats']}
+        self.assertEqual(self.ask(self.result(preferences=prefs),message='Help me choose',preferences=prefs).status_code,503)
+        # Neither example fixture provides a verified heated-seat feature.
+        relaxed={**prefs,'required_features':[]}
+        self.assertEqual(self.ask(self.result(preferences=relaxed),message='Help me choose',preferences=prefs).status_code,503)
+
+    def test_actual_gateway_request_is_bounded_and_has_no_retry(self):
+        import httpx
+        from backend.showcase_ai import provider_call
+        real_client=httpx.Client;seen=[]
+        def handler(request):
+            seen.append(request)
+            self.assertEqual(str(request.url),'https://api.x.ai/v1/chat/completions')
+            payload=json.loads(request.content)
+            self.assertEqual(payload['max_tokens'],1800)
+            self.assertEqual(payload['model'],'mock-model')
+            self.assertEqual(payload['response_format'],{'type':'json_object'})
+            self.assertEqual(request.headers['Authorization'],'Bearer mock-secret-never-log')
+            return httpx.Response(503,json={'error':'Provider unavailable'})
+        with patch('backend.showcase_ai.httpx.Client',side_effect=lambda **kwargs:real_client(transport=httpx.MockTransport(handler))):
+            with self.assertRaises(httpx.HTTPStatusError):provider_call('System instruction',{'facts':'approved'})
+        self.assertEqual(len(seen),1)
+
+    def test_example_seed_is_idempotent_and_preserves_existing_rows_and_cap(self):
+        from scripts.seed_showcase import seed
+        with connect() as c:
+            execute(c,'INSERT INTO memberships(subject,business_id,role,active) VALUES(%s,%s,%s,TRUE)',('owner-a','a','owner'))
+            execute(c,'UPDATE ai_budget SET calls=9')
+        seed('a');seed('a')
+        self.assertEqual(len(self.client.get('/api/listings').json()),6)
+        with connect() as c:
+            self.assertEqual(execute(c,'SELECT calls FROM ai_budget').fetchone()['calls'],9)
+        self.assertEqual(self.client.get('/api/public/'+self.ids[0]).json()['facts']['price'],2350000)
+
     def test_suggestions_are_private_and_do_not_invent_answers(self):
         result={'questions':[{'question':'Is a history report available?','reason':'No history record is supplied.','topic':'Condition'}]}
         with patch('backend.showcase_ai.provider_call',return_value=self.envelope(result)):

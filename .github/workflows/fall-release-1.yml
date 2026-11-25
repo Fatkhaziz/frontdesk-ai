@@ -72,3 +72,11 @@ jobs:
           python scripts/check-business-browser.py
       - name: Diff whitespace
         run: git diff --check
+      - name: Save rendered showcase evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rendered-showcase
+          path: /tmp/frontdesk-*.png
+          if-no-files-found: ignore
+          retention-days: 7

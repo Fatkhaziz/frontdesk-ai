@@ -1,5 +1,7 @@
 # FrontDesk AI presentation handoff
 
+> November 24 scope update: the current dealership AI showcase, setup, acceptance criteria and evidence map are in [showcase-release.md](showcase-release.md). This document retains earlier baseline or full-system design details; three live business examples are no longer required for the fall showcase.
+
 Verified November 5, 2026. Local app: http://127.0.0.1:8000/. Branch: `feat/feasibility-demo`. The server is detached; its credential-safe log is `/private/tmp/frontdesk-ai-local.log`. No spring features were added. Previous rehearsal notes are preserved in [the archive](archive/local-demo-handoff-before-dashboard.md).
 
 ## What is live

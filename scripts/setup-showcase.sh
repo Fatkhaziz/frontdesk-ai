@@ -18,6 +18,9 @@ npm run build --prefix frontend
 set -a
 source .env
 set +a
+if [[ -n "${XAI_API_KEY:-}" && -n "${XAI_MODEL:-}" ]]; then
+  export QUESTION_MODE=ai
+fi
 .venv/bin/python -m backend.verify_integration --apply-pending
 if [[ "${1:-}" == '--with-examples' ]]; then
   .venv/bin/python -m scripts.seed_showcase --confirm-synthetic

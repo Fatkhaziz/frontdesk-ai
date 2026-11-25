@@ -1,5 +1,7 @@
 # Fall progress and practice guide
 
+> November 24 scope update: the current dealership AI showcase, setup, acceptance criteria and evidence map are in [showcase-release.md](showcase-release.md). This document retains earlier baseline or full-system design details; three live business examples are no longer required for the fall showcase.
+
 > Historical November 19 snapshot. The [November 24 Fall Release 1 handoff](fall-release-1.md) supersedes implementation status, answering behavior, tests and verification instructions below.
 
 
