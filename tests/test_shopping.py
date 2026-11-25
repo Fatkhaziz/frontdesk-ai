@@ -209,6 +209,20 @@ class Shopping(unittest.TestCase):
         self.assertEqual(self.client.get('/api/shop/a').json()['knowledge'],[])
         self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['operation'],'knowledge_suggestions')
 
+    def test_owner_suggestions_exclude_unpublished_question_text(self):
+        card={'id':'published','question':'Published question?','answer':'Ask staff.','status':'approved','source_note':'Reviewed','reason':''}
+        self.assertEqual(self.client.put('/api/dealer/knowledge',json={'expected_revision':0,'cards':[card]}).status_code,200)
+        self.assertEqual(self.client.post('/api/dealer/knowledge/publish',json={'expected_revision':1,'confirm_approval':True}).status_code,200)
+        private={**card,'question':'PRIVATE-QUESTION-CANARY','answer':'PRIVATE-ANSWER-CANARY','status':'draft'}
+        self.assertEqual(self.client.put('/api/dealer/knowledge',json={'expected_revision':1,'cards':[private]}).status_code,200)
+        result={'questions':[{'question':'Is a history report available?','reason':'Not supplied.','topic':'Condition'}]}
+        with patch('backend.showcase_ai.provider_call',return_value=self.envelope(result)) as provider:
+            r=self.client.post('/api/dealer/knowledge/suggest',json={'expected_revision':2})
+        self.assertEqual(r.status_code,200,r.text)
+        payload=provider.call_args.args[1]
+        self.assertEqual(payload['existing_questions'],['Published question?'])
+        self.assertNotIn('PRIVATE-',json.dumps(payload))
+
     def test_explicit_followup_context_idempotency_and_staff_status(self):
         body={'request_key':str(uuid.uuid4()),'message':'Please confirm warranty terms.','contact':'synthetic@example.invalid','consent':True,'preferences':{'budget_cents':2500000},'listing_ids':self.ids}
         r=self.client.post('/api/shop/a/inquiries',json=body)

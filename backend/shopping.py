@@ -351,7 +351,7 @@ def create_router(identity, owner):
                     raise ValueError('question_length')
             return result
         return run_ai(business, 'knowledge_suggestions', request.state.request_id, sources, prompt,
-                      {'business_type': 'dealership', 'business_name': data['name'], 'inventory': data['listings'], 'published_profile': data['profile'], 'existing_questions': [c['question'] for c in state['cards']]},
+                      {'business_type': 'dealership', 'business_name': data['name'], 'inventory': data['listings'], 'published_profile': data['profile'], 'existing_questions': [c['question'] for c in data['knowledge']]},
                       validate, lambda: catalog(business) == data and knowledge_state(business) == state)
 
     @router.post('/api/shop/{business_id}/inquiries', status_code=201)
