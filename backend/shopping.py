@@ -280,8 +280,12 @@ def validate_answer(result, data, body, sources):
         raise Rejection('preferences', 'removed_feature_requirement', 'required_features')
     if set(body.preferences.priorities) - set(prefs.priorities) and not re.search(r'remove|clear|forget|no longer|instead|less important', body.message, re.I):
         raise Rejection('preferences', 'removed_constraint', 'priorities')
-    if body.preferences.budget_kind != 'unknown' and body.preferences.budget_kind != prefs.budget_kind and not re.search(r'total|fees|vehicle|tax|price|out.the.door', body.message, re.I):
-        raise Rejection('preferences', 'removed_constraint', 'budget_kind')
+    if body.preferences.budget_kind != prefs.budget_kind:
+        kind_terms = {'unknown': r'not sure|unsure|unknown|clear|forget',
+                      'vehicle': r'vehicle|before tax|excluding (?:tax|fees)',
+                      'total': r'total|including (?:tax|fees)|out.the.door|all.in'}
+        if not re.search(kind_terms[prefs.budget_kind], body.message, re.I):
+            raise Rejection('preferences', 'removed_constraint' if prefs.budget_kind == 'unknown' else 'invented_preference', 'budget_kind')
     # Check numbers against cited published facts, customer constraints and
     # exact arithmetic, rather than all numbers from unrelated inventory.
     cited = [allowed[r] for r in refs]

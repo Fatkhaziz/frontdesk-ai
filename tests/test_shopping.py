@@ -186,6 +186,7 @@ class Shopping(unittest.TestCase):
         for changed,field in [({'min_seats':None},'min_seats'),({'priorities':[]},'priorities'),({'budget_kind':'unknown'},'budget_kind')]:
             self.assertEqual(self.ask({**result,'preferences':{**new,**changed}},message=message,preferences=old).status_code,503)
             self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['field'],field)
+        self.assertEqual(self.ask({**result,'preferences':{**new,'budget_kind':'unknown'}},message='Raise my vehicle-price budget to $30,000.',preferences=old).status_code,503)
 
     def test_safe_diagnostics_cover_parse_preferences_sources_and_followup(self):
         cases=[(self.envelope(self.result(preferences={'budget_cents':'PRIVATE-CONTACT-SECRET'})), 'preferences','invalid_preferences','budget_cents'),
