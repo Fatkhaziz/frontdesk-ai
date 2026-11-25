@@ -76,6 +76,8 @@ def owner(member=Depends(identity)):
     return member
 
 app.include_router(create_router(identity, owner))
+from .shopping import create_router as shopping_router, format_shopping_inquiry
+app.include_router(shopping_router(identity, owner))
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -87,6 +89,22 @@ class Facts(Strict):
     price: int = Field(ge=0,le=1000000000,description='USD cents')
     mileage: int = Field(ge=0,le=10000000)
     availability: Literal['available','reserved','sold'] = 'available'
+    body_style: Literal['sedan','suv','hatchback','truck','coupe','wagon','van'] | None = None
+    fuel_type: Literal['gasoline','diesel','hybrid','electric','plug_in_hybrid'] | None = None
+    drivetrain: Literal['fwd','rwd','awd','4wd'] | None = None
+    transmission: Literal['automatic','manual'] | None = None
+    seats: int | None = Field(default=None,ge=1,le=15)
+    mpg_combined: float | None = Field(default=None,gt=0,le=150)
+    cargo_cubic_feet: float | None = Field(default=None,gt=0,le=500)
+    features: list[str] = Field(default_factory=list,max_length=20)
+    synthetic: bool = False
+
+    @field_validator('features')
+    @classmethod
+    def feature_labels(cls, values):
+        if any(not value.strip() or len(value) > 80 for value in values):
+            raise ValueError('Use short, nonempty feature labels.')
+        return list(dict.fromkeys(v.strip() for v in values))
 
     @field_validator('make', 'model')
     @classmethod
@@ -142,7 +160,9 @@ def health():
 @app.get('/api/config')
 def config():
     url, key = supabase_config()
-    return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled(), 'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'}
+    return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled(),
+            'shoppingAiEnabled':question_mode() == 'ai' and bool(os.getenv('XAI_API_KEY') and os.getenv('XAI_MODEL')),
+            'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'}
 
 @app.get('/api/listings')
 def listings(m=Depends(identity)):
@@ -224,7 +244,7 @@ def unpublish(lid:str,m=Depends(owner)):
 @app.get('/api/public/{lid}')
 def public(lid:str):
     with connect() as c: row=record(c,lid,public=True)
-    return {**json.loads(row['published']),'revision':row['published_revision']}
+    return {**json.loads(row['published']),'revision':row['published_revision'],'shop_url':'/shop/'+row['business_id']}
 
 @app.post('/api/public/{lid}/questions')
 def question(lid:str,body:Question):
@@ -270,7 +290,8 @@ def inbox(m=Depends(identity)):
         rows=execute(c,'SELECT i.*,l.facts FROM inquiries i JOIN listings l ON l.id=i.listing_id AND l.business_id=i.business_id WHERE i.business_id=%s ORDER BY i.created_at DESC,i.id DESC',(m['business_id'],)).fetchall()
         vehicles = [{**dict(r),'kind':'listing','vehicle_name': ' '.join(str(json.loads(r['facts'])[k]) for k in ('year','make','model'))} for r in rows]
         services = [format_inquiry(r) for r in execute(c, 'SELECT * FROM business_inquiries WHERE business_id=%s', (m['business_id'],)).fetchall()]
-        return sorted(vehicles + services, key=lambda row: (row['created_at'], row['id']), reverse=True)
+        shopping = [format_shopping_inquiry(r) for r in execute(c, 'SELECT * FROM shopping_inquiries WHERE business_id=%s', (m['business_id'],)).fetchall()]
+        return sorted(vehicles + services + shopping, key=lambda row: (row['created_at'], row['id']), reverse=True)
 
 @app.patch('/api/inquiries/{iid}')
 def inquiry_status(iid:str,body:Status,m=Depends(identity)):
@@ -308,6 +329,7 @@ if (assets/'assets').exists(): app.mount('/assets',StaticFiles(directory=assets/
 @app.get('/')
 @app.get('/listing/{lid}')
 @app.get('/business/{lid}')
+@app.get('/shop/{lid}')
 def frontend(lid:str=''):
     if not (assets/'index.html').exists(): raise HTTPException(503,'Build frontend first')
     return FileResponse(assets/'index.html')

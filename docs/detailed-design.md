@@ -1,5 +1,7 @@
 # FrontDesk AI Detailed System Design
 
+> November 24 scope update: the current dealership AI showcase, setup, acceptance criteria and evidence map are in [showcase-release.md](showcase-release.md). This document retains earlier baseline or full-system design details; three live business examples are no longer required for the fall showcase.
+
 CIS 457 Senior Design 1 | Team submission | Revised November 19, 2026
 
 Fatkhaziz Mukhamedov, Al Baraa Khaled, Mohammad Abdullah, Amar Al Balkhi

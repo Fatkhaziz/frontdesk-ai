@@ -8,6 +8,7 @@ export default function PublicListing({ id, api, config }: {
     const [listing, setListing] = useState<{
         facts: Facts;
         description: string;
+        shop_url?: string;
     } | null>(null), [error, setError] = useState('');
     const [question, setQuestion] = useState(''), [messages, setMessages] = useState<{
         question: string;
@@ -44,6 +45,8 @@ export default function PublicListing({ id, api, config }: {
     }
     return <>{error && <p role="alert" className="notice">{error}</p>}{listing ? <>
   <div className="public-hero"><p className="eyebrow">Demo Motors · Available vehicles</p><h1>{vehicleName(listing.facts)}</h1><div className="price">{money(listing.facts.price)} <small>USD</small></div><div className="vehicle-meta"><span>{listing.facts.mileage.toLocaleString()} miles</span><span className="badge green">{listing.facts.availability}</span></div></div>
+  {listing.shop_url && <p><a className="button primary" href={listing.shop_url}>Compare vehicles and find my fit →</a></p>}
+  {listing.facts.synthetic && <p className="notice">Fictional showcase vehicle. Specifications are illustrative, not a real sale offer.</p>}
   <div className="public-layout"><section><p className="eyebrow">Vehicle overview</p><h2>Ready for your next drive</h2><p className="description">{listing.description}</p><dl className="specs"><div><dt>Model year</dt><dd>{listing.facts.year}</dd></div><div><dt>Mileage</dt><dd>{listing.facts.mileage.toLocaleString()} miles</dd></div><div><dt>Availability</dt><dd>{listing.facts.availability}</dd></div></dl><p className="muted">Details shown here have been reviewed and approved by the dealership.</p></section>
   <section className="chat"><p className="eyebrow">Your vehicle assistant</p><h2>Ask about this vehicle</h2><p>{config.questionMode === 'ai' ? 'Live AI helps identify price and mileage questions. Answers come from the approved listing.' : 'Scripted fallback answers supported price and mileage questions from the approved listing.'}</p><p className="privacy">{config.questionMode === 'ai' ? 'Supported questions are processed by xAI. ' : ''}Please leave personal details out of chat. For other questions, we can save an inquiry for staff.</p>
    <div className="conversation" role="log" aria-live="polite">{messages.length === 0 && <p className="empty">Try “What is the price?” or “How many miles does it have?”</p>}{messages.map((m, i) => <div key={i}><p className="bubble customer"><strong>You</strong>{m.question}</p><p className="bubble assistant"><strong>Vehicle assistant</strong>{m.answer}</p></div>)}</div>

@@ -23,7 +23,7 @@ class LivePreflight(unittest.TestCase):
         fixtures.BusinessReception.publish(self)
         with connect() as c:
             execute(c, 'CREATE TABLE schema_migrations(name TEXT PRIMARY KEY,sha256 TEXT)')
-            for name in ['003_business_reception.sql', '004_ai_interaction_evidence.sql']:
+            for name in ['003_business_reception.sql', '004_ai_interaction_evidence.sql', '005_shopping_assistant.sql']:
                 execute(c, 'INSERT INTO schema_migrations VALUES(%s,%s)', (name, hashlib.sha256(Path('migrations',name).read_bytes()).hexdigest()))
         self.provider_env = patch.dict(os.environ, {'XAI_MODEL':verification.MODEL,'XAI_API_KEY':'synthetic-key','AI_CALL_LIMIT':'10'})
         self.provider_env.start()

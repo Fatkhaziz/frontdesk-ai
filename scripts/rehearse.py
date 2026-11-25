@@ -37,7 +37,7 @@ def main():
 
         with connect() as connection:
             connection.executescript(Path('migrations/001_demo.sql').read_text().split('-- Application data')[0] + 'COMMIT;')
-            for migration in ['002_listing_ai_tasks.sql', '003_business_reception.sql', '004_ai_interaction_evidence.sql']:
+            for migration in ['002_listing_ai_tasks.sql', '003_business_reception.sql', '004_ai_interaction_evidence.sql', '005_shopping_assistant.sql']:
                 connection.executescript(Path('migrations', migration).read_text().split('REVOKE')[0] + 'COMMIT;')
             for business_id, name in [('rehearsal-motors', 'Demo Motors'), ('rehearsal-salon', 'Demo Salon'), ('rehearsal-studio', 'Demo Studio')]:
                 execute(connection, 'INSERT INTO businesses VALUES(%s,%s)', (business_id, name))
@@ -74,6 +74,13 @@ def main():
                 result = client.post('/api/listings', headers=headers, json={'facts': facts, 'description': '2022 Toyota Camry with 42,000 miles. Available for $23,500 USD.'})
                 assert result.status_code == 201
                 assert client.post('/api/listings/' + result.json()['id'] + '/publish', headers=headers, json={'expected_revision': 1, 'confirm_approval': True}).status_code == 200
+
+        from scripts.sample_inventory import example_vehicles
+        for facts in example_vehicles():
+            headers={'Authorization':'Bearer '+make_token('motors-owner')}
+            result=client.post('/api/listings',headers=headers,json={'facts':facts,'description':'Fictional showcase vehicle, not a real sale offer.'})
+            assert result.status_code==201
+            assert client.post('/api/listings/'+result.json()['id']+'/publish',headers=headers,json={'expected_revision':1,'confirm_approval':True}).status_code==200
 
         logging.getLogger('frontdesk').setLevel(logging.ERROR)
         print('\nREHEARSAL ONLY — synthetic local data and simulated sign-in', flush=True)

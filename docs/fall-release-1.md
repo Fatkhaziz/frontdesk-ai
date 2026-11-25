@@ -1,5 +1,7 @@
 # Fall Release 1 technical reference
 
+> November 24 scope update: the current dealership AI showcase, setup, acceptance criteria and evidence map are in [showcase-release.md](showcase-release.md). This document retains earlier baseline or full-system design details; three live business examples are no longer required for the fall showcase.
+
 Updated November 24, 2026. Source links below target the [existing review branch](https://github.com/Fatkhaziz/frontdesk-ai/tree/docs/professor-feedback-2026-11-19). They describe implemented behavior, not the complete spring requirements.
 
 ## Database contract
