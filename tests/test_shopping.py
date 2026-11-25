@@ -176,10 +176,13 @@ class Shopping(unittest.TestCase):
         old={**Preferences().model_dump(),'budget_cents':2500000,'budget_kind':'vehicle','min_seats':5,'priorities':['fuel_economy']}
         new={**old,'budget_cents':3000000}
         message='Raise my budget to $30,000; retain my other requirements.'
-        result=self.result(preferences=new,answer='The listed vehicle is $23,500, which is $6,500 below your $30,000 budget.')
-        r=self.ask(result,message=message,preferences=old,selected_ids=self.ids,history=[{'role':'user','content':'I need 5 seats and fuel economy.'},{'role':'assistant','content':'Would you prefer a lower price?'}])
+        result=self.result(preferences=new,answer='Your budget rose from $25,000 to $30,000. The listed vehicle is $23,500, which is $6,500 below your new budget.')
+        with patch('backend.showcase_ai.provider_call',return_value=self.envelope(result)) as provider:
+            r=self.client.post('/api/shop/a/assist',json={'message':message,'preferences':old,'selected_ids':self.ids,'history':[{'role':'user','content':'I need 5 seats and fuel economy.'},{'role':'assistant','content':'Would you prefer a lower price?'}]})
         self.assertEqual(r.status_code,200,r.text)
         self.assertEqual(r.json()['preferences'],new)
+        self.assertFalse(any(s['id'].endswith(':budget_gap') for s in provider.call_args.args[1]['sources']))
+        self.assertEqual(self.ask({**result,'answer':'Your new $30,000 budget is $1,500 above the $23,500 price.'},message=message,preferences=old).status_code,503)
         for changed,field in [({'min_seats':None},'min_seats'),({'priorities':[]},'priorities'),({'budget_kind':'unknown'},'budget_kind')]:
             self.assertEqual(self.ask({**result,'preferences':{**new,**changed}},message=message,preferences=old).status_code,503)
             self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['field'],field)
