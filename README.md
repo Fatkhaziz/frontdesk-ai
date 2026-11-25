@@ -30,7 +30,7 @@ Use a local `.env` copied from `.env.example`; never commit credentials. `.env`,
 | `DRAFT_AI_ENABLED` | `1` enables paid listing drafts, `0` disables them. If omitted, follows question mode. |
 | `AI_CALL_LIMIT` | Hard project-wide lifetime attempt cap, including failed attempts. Local demo: 10. Not a dollar-balance meter. |
 
-Do not place xAI/database secrets in a `VITE_` variable. The verified local model is `grok-4.20-0309-non-reasoning`. Legacy vehicle inference has a 200-token output cap; new showcase inference has an 1,800-token output cap and a 48,000-byte payload bound. No automatic retry. The customer explicitly sends conversation context/preferences to xAI; staff inquiry contacts are kept out of AI payloads. The input filter rejects common credential/contact patterns but is not a universal personal-data detector.
+Do not place xAI/database secrets in a `VITE_` variable. The configured model is `grok-4.20-0309-non-reasoning`. Legacy vehicle inference has a 200-token output cap; new showcase inference has an 1,800-token output cap and a 48,000-byte payload bound. No automatic retry. The customer explicitly sends conversation context/preferences to xAI; staff inquiry contacts are kept out of AI payloads. The input filter rejects common credential/contact patterns but is not a universal personal-data detector.
 
 ## Database setup
 
@@ -43,11 +43,11 @@ python -m backend.migrate
 python -m backend.check_connection
 ```
 
-Migrations are atomic, serialized, and checksum-tracked. An existing manually created untracked schema is refused for review; do not recreate/reset it. `001_demo.sql` defines the existing data; additive `002_listing_ai_tasks.sql` links new AI requests to listings for safe deletion. Migrations 001 and 002 were applied in the earlier Supabase demo. Additive `003_business_reception.sql` creates business profiles, service inquiries and publication events; `004_ai_interaction_evidence.sql` adds provenance for new business Q&A attempts. Apply pending migrations before starting this updated application. Migrations 003/004 were verified on the configured Mac on November 24. New `005_shopping_assistant.sql` adds reviewed owner knowledge, publication events, shopping inquiries and correlated showcase AI runs; apply it before starting this release. This workspace has not applied 005 to live Supabase. Provision the business/membership using parameterized administration or the Supabase SQL editor with the actual confirmed Auth UUID. Browser database roles have no application-table grants.
+Migrations are atomic, serialized, and checksum-tracked. An existing manually created untracked schema is refused for review; do not recreate/reset it. `001_demo.sql` defines the existing data; additive `002_listing_ai_tasks.sql` links new AI requests to listings for safe deletion. Migrations 001 and 002 were applied in the earlier Supabase demo. Additive `003_business_reception.sql` creates business profiles, service inquiries and publication events; `004_ai_interaction_evidence.sql` adds provenance for new business Q&A attempts. Apply pending migrations before starting this updated application. Migrations 003/004 were verified on the configured Mac on November 24. New `005_shopping_assistant.sql` adds reviewed owner knowledge, publication events, shopping inquiries and correlated showcase AI runs; apply it before starting this release. Migration 005 and its checksum are now verified live through the configured Supabase dashboard; four authorized fictional vehicles were added while all pre-existing rows were preserved. The current attempt count is 9/10. See the release guide for the separate Mac server and real-AI blockers. Provision the business/membership using parameterized administration or the Supabase SQL editor with the actual confirmed Auth UUID. Browser database roles have no application-table grants.
 
 ## Build and run
 
-Python 3.12 and Node 22+:
+Python 3.9+ (3.12 recommended) and Node 22+:
 
 ```sh
 python -m venv .venv
@@ -83,7 +83,7 @@ npm run build --prefix frontend
 git diff --check
 ```
 
-43 backend tests use isolated SQLite with foreign keys enabled and injected Auth/AI. All six frontend tests passed in public GitHub CI, including simulated-DOM approval, staff, inquiry retry and Q&A evidence assertions. The production build, disposable PostgreSQL migration/integration check and Chromium workflows also passed there. Local production build and three domain tests passed; the full local interaction suite still requires an uncached dependency and network access. No lint/format script existed; the build includes strict TypeScript checks. Optional `scripts/check-browser.py` uses Playwright/Chromium, a temporary SQLite database and mocked Auth/Grok on loopback port 8001 to rehearse the full owner/public/delete workflow at desktop/mobile sizes. Install browser tooling outside the repository's tracked artifacts; run with the project root on `PYTHONPATH`. Automated tests never load `.env` or call paid xAI.
+62 backend tests pass locally using isolated SQLite with foreign keys enabled and injected Auth/AI. [Maintenance CI](https://github.com/Fatkhaziz/frontdesk-ai/actions/runs/45528060342) passed 62 backend tests on both Python 3.9 and 3.12, all nine frontend interaction tests, the strict production build, disposable PostgreSQL checks and all three rendered Chromium workflows. These use mocked Auth/Grok, not the real configured services. The local production build passed; full local frontend tests remain blocked by unavailable test dependencies in the restricted runner. No lint/format script existed; the build includes strict TypeScript checks. Optional `scripts/check-browser.py` uses Playwright/Chromium, a temporary SQLite database and mocked Auth/Grok on loopback port 8001 to rehearse the full owner/public/delete workflow at desktop/mobile sizes. Install browser tooling outside the repository's tracked artifacts; run with the project root on `PYTHONPATH`. Automated tests never load `.env` or call paid xAI.
 
 These mocks are not real integration evidence. Earlier handoffs describe historical provider checks; this continuation made no paid requests and does not attribute new metadata to historical records. Real Safari sign-in must use the owner's credentials privately.
 

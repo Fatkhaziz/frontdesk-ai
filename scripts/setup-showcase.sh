@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One setup command after pulling this release. Never changes the paid-call cap.
+set +vx
 set -euo pipefail
-set +x
 cd "$(dirname "$0")/.."
 if [[ ! -f .env ]]; then
   echo 'The existing project .env is required. Use your configured Mac checkout.' >&2

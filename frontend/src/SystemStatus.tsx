@@ -167,7 +167,8 @@ export default function SystemStatus({ api }: { api: Api }) {
                     <dl className="specs">
                       {[
                         ["Time", dateTime(r.created_at)],
-                        ["Model", r.model],
+                        ["Requested model", r.requested_model || r.model],
+                        ["Provider model", r.provider_model || "Not reported"],
                         [
                           "Provider response ID",
                           r.provider_response_id || "Not returned",

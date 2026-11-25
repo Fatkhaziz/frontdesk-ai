@@ -224,4 +224,25 @@ class Shopping(unittest.TestCase):
         self.assertEqual(self.client.post('/api/shop/a/inquiries',json={**body,'consent':False}).status_code,422)
 
 
+    def test_provider_reported_model_is_recorded_separately_from_requested_alias(self):
+        envelope = {**self.envelope(self.result()), 'model': 'grok-resolved-version'}
+        with patch('backend.showcase_ai.provider_call', return_value=envelope):
+            response = self.client.post('/api/shop/a/assist', json={'message': 'Help me compare'})
+        self.assertEqual(response.status_code, 200)
+        record = self.client.get('/api/assistant/evidence').json()[0]
+        self.assertEqual(record['model'], 'grok-resolved-version')
+        self.assertEqual(record['requested_model'], 'mock-model')
+        self.assertEqual(record['provider_model'], 'grok-resolved-version')
+        with connect() as c:
+            task = execute(c, 'SELECT model,usage FROM ai_tasks WHERE id=%s', (record['task_id'],)).fetchone()
+        self.assertEqual(task['model'], 'grok-resolved-version')
+        self.assertEqual(json.loads(task['usage'])['requested_model'], 'mock-model')
+
+    def test_missing_provider_model_remains_unknown(self):
+        self.assertEqual(self.ask().status_code, 200)
+        record = self.client.get('/api/assistant/evidence').json()[0]
+        self.assertEqual(record['requested_model'], 'mock-model')
+        self.assertIsNone(record['provider_model'])
+
+
 if __name__=='__main__':unittest.main()
