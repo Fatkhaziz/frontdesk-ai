@@ -39,7 +39,10 @@ def main():
             prefs.budget_cents=2500000;prefs.budget_kind='vehicle';prefs.min_seats=5
         if '30,000' in payload['message']:
             prefs.budget_cents=3000000
-        matches=[l for l in payload['inventory'] if eligible(l,prefs)]
+        # Mock boundary consumes the same explicitly labeled dollar payload as
+        # xAI; convert back only for the backend's integer-cent helper here.
+        inventory=[{**l,'facts':{**l['facts'],'price':round(float(l['facts']['price_usd'])*100)}} for l in payload['inventory']]
+        matches=[l for l in inventory if eligible(l,prefs)]
         lid=matches[0]['id'] if matches else payload['inventory'][0]['id']
         source=next(s for s in payload['sources'] if s['listing_id']==lid and s['id'].endswith(':price'))
         return fixture.envelope({'preferences':prefs.model_dump(),'answer':'The lower-priced option leaves more of your vehicle budget available. Compare seating and mileage before deciding; total costs still need staff confirmation.',

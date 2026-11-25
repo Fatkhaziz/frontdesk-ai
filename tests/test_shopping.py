@@ -128,6 +128,7 @@ class Shopping(unittest.TestCase):
             self.assertEqual(r.status_code,503,r.text)
         records=self.client.get('/api/assistant/evidence').json()
         self.assertTrue(all(r['provider_outcome']=='succeeded' and r['application_outcome']=='invalid_output' for r in records))
+        self.assertTrue(any(r['rejection']['source_id']==f'listing:{self.ids[1]}:r1:price' for r in records))
 
     def test_foreign_sources_invented_numbers_and_truncated_output_rejected(self):
         for result in [self.result(source_ids=['foreign-business:price']),self.result(answer='This vehicle costs $9,999.'),self.result(recommended_ids=['foreign-vehicle'])]:
@@ -147,6 +148,76 @@ class Shopping(unittest.TestCase):
             self.assertEqual(self.client.post('/api/shop/a/assist',json={'message':'Help me'}).status_code,429)
             call.assert_not_called()
 
+    def test_selected_vehicle_price_difference_and_explicit_usd_provider_context(self):
+        sources=source_list(catalog('a'))
+        prices=[s['id'] for s in sources if s['id'].endswith(':price')]
+        comparison=next(s for s in sources if s['id'].startswith('comparison:'))
+        result=self.result(answer='The listed prices are $23,500 and $26,500. The difference is $3,000, before unknown taxes and fees.',source_ids=prices)
+        with patch('backend.showcase_ai.provider_call',return_value=self.envelope(result)) as provider:
+            r=self.client.post('/api/shop/a/assist',json={'message':'Compare my selected vehicles','selected_ids':self.ids})
+        self.assertEqual(r.status_code,200,r.text)
+        payload=provider.call_args.args[1]
+        self.assertEqual(payload['selected_ids'],self.ids)
+        self.assertEqual(next(l for l in payload['inventory'] if l['id']==self.ids[0])['facts']['price_usd'],'23500.00')
+        self.assertNotIn('price',payload['inventory'][0]['facts'])
+        self.assertEqual(set(comparison['inputs']),set(prices))
+        self.assertEqual(self.ask({**result,'answer':'The difference is $3,100.'},selected_ids=self.ids).status_code,503)
+        rejection=self.client.get('/api/assistant/evidence').json()[0]['rejection']
+        self.assertEqual(rejection,{'stage':'claims','reason':'unsupported_number','field':'answer','source_id':None})
+
+    def test_mpg_number_is_not_a_supported_dollar_price(self):
+        sources=source_list(catalog('a'))
+        refs=[s['id'] for s in sources if s['listing_id']==self.ids[0] and s['id'].endswith((':price',':mpg_combined'))]
+        r=self.ask(self.result(answer='This vehicle costs $45.',source_ids=refs))
+        self.assertEqual(r.status_code,503)
+        self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['reason'],'unsupported_number')
+
+    def test_budget_followup_preserves_seats_priority_and_selection(self):
+        old={**Preferences().model_dump(),'budget_cents':2500000,'budget_kind':'vehicle','min_seats':5,'priorities':['fuel_economy']}
+        new={**old,'budget_cents':3000000}
+        message='Raise my budget to $30,000; retain my other requirements.'
+        result=self.result(preferences=new,answer='Your budget rose from $25,000 to $30,000. The listed vehicle is $23,500, which is $6,500 below your new budget.')
+        with patch('backend.showcase_ai.provider_call',return_value=self.envelope(result)) as provider:
+            r=self.client.post('/api/shop/a/assist',json={'message':message,'preferences':old,'selected_ids':self.ids,'history':[{'role':'user','content':'I need 5 seats and fuel economy.'},{'role':'assistant','content':'Would you prefer a lower price?'}]})
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()['preferences'],new)
+        self.assertFalse(any(s['id'].endswith(':budget_gap') for s in provider.call_args.args[1]['sources']))
+        self.assertEqual(self.ask({**result,'answer':'Your new $30,000 budget is $1,500 above the $23,500 price.'},message=message,preferences=old).status_code,503)
+        for changed,field in [({'min_seats':None},'min_seats'),({'priorities':[]},'priorities'),({'budget_kind':'unknown'},'budget_kind')]:
+            self.assertEqual(self.ask({**result,'preferences':{**new,**changed}},message=message,preferences=old).status_code,503)
+            self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['field'],field)
+        self.assertEqual(self.ask({**result,'preferences':{**new,'budget_kind':'unknown'}},message='Raise my vehicle-price budget to $30,000.',preferences=old).status_code,503)
+
+    def test_safe_diagnostics_cover_parse_preferences_sources_and_followup(self):
+        cases=[(self.envelope(self.result(preferences={'budget_cents':'PRIVATE-CONTACT-SECRET'})), 'preferences','invalid_preferences','budget_cents'),
+               (self.envelope(self.result(source_ids=['Bearer PRIVATE-CONTACT-SECRET'])), 'sources','unapproved_source','source_ids'),
+               (self.envelope(self.result(follow_up='Would a $9,999 price help?')), 'claims','unsupported_number','follow_up'),
+               ({'choices':[]}, 'envelope','invalid_envelope',None),
+               (self.envelope(self.result()), 'json','invalid_json',None)]
+        cases[-1][0]['choices'][0]['message']['content']='{"answer":"PRIVATE-CONTACT-SECRET","answer":NaN}'
+        for envelope,stage,reason,field in cases:
+            with patch('backend.showcase_ai.provider_call',return_value=envelope) as provider:
+                r=self.client.post('/api/shop/a/assist',json={'message':'Help me choose'})
+            self.assertEqual(r.status_code,503,r.text)
+            provider.assert_called_once()
+            record=self.client.get('/api/assistant/evidence').json()[0]
+            self.assertEqual(record['rejection'],{'stage':stage,'reason':reason,'field':field,'source_id':None})
+            self.assertNotIn('PRIVATE-CONTACT-SECRET',json.dumps(record))
+            self.assertEqual(record['provider_outcome'],'succeeded')
+        # Historical requests without diagnostics remain explicitly missing.
+        with connect() as c: execute(c,'UPDATE ai_tasks SET result=NULL')
+        self.assertIsNone(self.client.get('/api/assistant/evidence').json()[0]['rejection'])
+
+    def test_selected_context_excludes_unselected_inventory_and_private_edits(self):
+        self.client.patch('/api/listings/'+self.ids[1],json={'facts':{**self.facts,'price':9990000},'description':'PRIVATE-CANARY','expected_revision':1})
+        with patch('backend.showcase_ai.provider_call',return_value=self.envelope(self.result())) as provider:
+            r=self.client.post('/api/shop/a/assist',json={'message':'Explain this selected option','selected_ids':[self.ids[0]]})
+        self.assertEqual(r.status_code,200,r.text)
+        payload=provider.call_args.args[1]
+        self.assertEqual([l['id'] for l in payload['inventory']],[self.ids[0]])
+        self.assertNotIn(self.ids[1],json.dumps(payload))
+        self.assertNotIn('PRIVATE-CANARY',json.dumps(payload))
+
     def test_stale_publication_rejects_but_private_edit_does_not(self):
         def update_public(*args):
             self.client.post('/api/listings/'+self.ids[0]+'/unpublish')
@@ -158,6 +229,7 @@ class Shopping(unittest.TestCase):
         with patch('backend.showcase_ai.provider_call',side_effect=stale):
             self.assertEqual(self.client.post('/api/shop/a/assist',json={'message':'Help me'}).status_code,409)
         self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['application_outcome'],'stale_source')
+        self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection'],{'stage':'publication','reason':'stale_source','field':None,'source_id':None})
 
     def test_contacts_not_sent_to_provider(self):
         with patch('backend.showcase_ai.provider_call') as provider:
