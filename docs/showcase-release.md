@@ -3,7 +3,33 @@
 
 
 
-## Find my fit repair — prepared for one restart and controlled verification
+
+## Controlled repair retest — actual final state: 13/17
+
+PR #9 was merged as `48a6ed800840a0186ed722d740e55b053e0ecade` after passing Python 3.9/3.12 regressions, **68 backend tests**, **12 frontend interaction tests**, production build, disposable PostgreSQL and all rendered mocked-service workflows. The user performed the **one restart**. Real owner diagnostics then confirmed **12/17**, Auth/PostgreSQL ready and `showcase_validation_version:2`.
+
+Exactly one controlled real request compared the selected fictional Compact Hatch/City Hybrid with a $25,000 vehicle-price budget, at least five seats and a soft fuel-economy priority. Grok completed, but the app rejected the answer at **`claims / unsupported_number / answer`**. No follow-up or automatic retry was sent. Final actual backend and independent database usage is **13/17**: **three class attempts preserved, one rehearsal attempt unused**. The server remains running on validation version 2 at `http://127.0.0.1:8000/`.
+
+| Controlled request evidence | Actual saved value |
+| --- | --- |
+| Task | `c8dfd655-4e2d-4d78-aee9-9618c855e6ab` |
+| HTTP request | `d404d874-f9a0-4809-8a49-d76d0aee59b4` |
+| Provider response | `132d2573-7e37-4577-97ad-24ff1cc04655` |
+| Requested / reported model | `grok-4.20-0309-non-reasoning` |
+| Provider / application | `succeeded` / `invalid_output` |
+| Tokens / latency | 6,186 input + 732 output = **6,918**; **4,646 ms** |
+| `ai_tasks.result.rejection` | `{"stage":"claims","reason":"unsupported_number","field":"answer","source_id":null}` |
+| Independent SELECT-only source check | **32 entries**, **two listings**, **one price-comparison source**, zero foreign/stale listing references; private review note and synthetic inquiry contact absent |
+
+The new structured diagnostic was genuinely saved in `ai_tasks.result`, joined to `assistant_runs` and displayed by System status. Parsing/shape/preferences/citation checks were reached before this numeric claim rejection, but no usable answer or extracted-preference success was returned. The diagnostic identifies the rule and field, not the exact numeric term: unrestricted rejected wording was not retained and is not recoverable from these records. Do not infer that the provider omitted citations from the cleared failed `source_ids` array, fabricate a transcript or claim a successful customer first turn/follow-up.
+
+Unpaid investigation then independently reproduced two remaining false positives: digits inside valid inline citation IDs/declared footnotes, and correct differences between cited published specification values (for example MPG). [PR #10](https://github.com/Fatkhaziz/frontdesk-ai/pull/10), commit `88c4d311ff4578d0e9e7b9db8fb3ef56a5d25581`, prepares version 3 with exact field/revision provenance and regression cases retaining rejection of invented differences, MPG-as-money and unknown citations. **70 local backend tests pass**, and the final PR #10 CI also passed Python 3.9/3.12, all 12 frontend interactions, the production build, disposable PostgreSQL and rendered mocked-service workflows. These are supported offline fixes, not proof of the lost response's contents. The patch is **not merged/activated or live verified**; the paid checks stopped after the failed controlled first turn, and no second restart was requested.
+
+The inaccurate owner wording was corrected privately: revision **6**, nine cards, published revision **2** byte-for-byte unchanged. The original successful owner-suggestion request remains historical real evidence. Current customer presentation readiness is **unresolved**; the two live customer turns have not passed.
+
+Actual screenshots, IDs, structured rejection and independent SQL evidence are saved in `~/Desktop/FrontDesk-AI-Fix-Verification-2026-11-25/` (`results.json`, `README.txt`, PNG/text captures, SHA-256 manifest). The earlier rehearsal folder was preserved. Before the controlled request the authenticated prepaid display was **$4.97**, top-up disabled; the observed uncached-rate token estimate for this request is **$0.0095625**, not a provider invoice. The post-call dollar balance was not rechecked. No purchase, counter reset, migration or class attempt was used.
+
+## Earlier repair preparation — superseded by controlled result above
 
 The original failed task `f77bf375-db67-4be3-bb34-880eeff5781e` still has `invalid_output` and a null `ai_tasks.result`; its rejected text and exact reason cannot be recovered. Unpaid differential reproduction loaded the original validator and supplied a valid comparison of published $23,500/$26,500 prices: it rejected the correct $3,000 difference as `unsupported_number`. The repaired validator accepts that same grounded arithmetic. This establishes a real code defect, not proof that this particular lost Grok response failed for that reason.
 
