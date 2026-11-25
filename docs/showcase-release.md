@@ -1,7 +1,34 @@
 # Fall Release 1 dealership showcase
 
 
-## Six-attempt rehearsal allowance — activation pending
+
+## Actual live rehearsal — partial success, class reserve preserved
+
+This is the latest state and supersedes the activation-pending notes below. On November 25 the restarted repository server reported **10 used / 16 total** with real Auth/PostgreSQL ready. Exactly **two** deliberate paid rehearsal requests were made, without retries. Final authenticated System status and an independent SELECT-only Supabase join confirm **12/16**: one rehearsal attempt unused and **all three class attempts reserved**. The server remains running at `http://127.0.0.1:8000/`.
+
+| Actual rehearsal | Provider / application | Durable evidence |
+| --- | --- | --- |
+| Owner question suggestions | `succeeded` / `accepted`; seven questions, blank owner answers | Task `de2a8b27-72ea-4636-840c-3963a9ba11fb`; HTTP `e2d608f9-778b-4081-a31d-f6ea47506107`; provider `518f2c93-dc0a-4a11-b8ff-5ffc5f17be79`; 1,271 input + 309 output = **1,580 tokens**; **2,929 ms** |
+| Find my fit, selected fictional Compact Hatch + City Hybrid; $25,000 vehicle-price budget, minimum five seats, fuel economy | `succeeded` / **`invalid_output`**; no accepted answer, extracted preferences or citations shown | Task `f77bf375-db67-4be3-bb34-880eeff5781e`; HTTP `be20c85d-b4b0-4586-bded-db04d7acf44a`; provider `ad23686e-0eee-4d1f-a277-a65b504ccdf0`; 12,350 input + 758 output = **13,108 tokens**; **4,738 ms** |
+| Conversational budget-changing follow-up | **Not sent** | Failed first turn created no accepted conversation history (`PublicShop.tsx` `ask()` only appends after an accepted response). Spending another attempt could not demonstrate the requested successful continuation. No simulated continuation or retry was substituted. |
+
+Both real responses reported `grok-4.20-0309-non-reasoning`. The accepted owner suggestions were saved additively as private knowledge revision **5**, nine total cards (two preserved plus seven new); published revision **2** was unchanged. Reloading owner knowledge verified persistence. Suggestions are drafts requiring human review: one calls existing Toyota listings “real,” which is not established by the published listing facts. It was not approved or published. Acceptance of the question schema does not prove every suggested premise is correct.
+
+The independent SQL join of `public.ai_tasks` and `public.assistant_runs` found **71 input source entries per request**, no foreign/stale listing references against current same-business publication revisions, no private review-note text and no synthetic inquiry-contact text in either snapshot. Owner returned citations are empty by design because it suggests questions. Failed customer `source_ids` are cleared by `run_ai()` on rejection; an empty saved array does **not** establish that Grok itself omitted citations. The valid input snapshot does not prove that the rejected output used those sources correctly.
+
+### Actual failure and missing diagnostic link
+
+`backend/showcase_ai.py` → `run_ai()` records provider completion before parsing/checking the response, then stores `invalid_output` when parsing, shape, length, constraints, numeric or source validation raises. The customer saw the explicit rejection notice; no facts or published records were changed. The gateway intentionally discards arbitrary provider text, but also does **not** retain the specific validation error code. Neither `ai_tasks.result` nor `assistant_runs` can reconstruct the rejected answer or exact failed rule. Do not guess whether this was a numeric, citation, shape or preference failure, weaken validation to force acceptance, or call this a successful customer workflow. The provider observability page exposes aggregate performance/errors, not the application's rejection reason. A safe persisted validation-reason code is missing and needs follow-up work before a controlled retest.
+
+The original November 24 accepted shopping run remains separate historical live evidence. The post-fix selected-vehicle answer and conversational budget update are **not live verified**. This rehearsal therefore does not establish full showcase readiness; earlier mocked tests remain separate evidence. No extra request was made to conceal or retry the failure.
+
+### Real backup and cost
+
+Private local backup: `~/Desktop/FrontDesk-AI-Rehearsal-2026-11-25/`. It contains `results.json`, `README.txt`, actual native PNG screenshots, observed UI evidence, independent SQL-result text and a SHA-256 manifest. Screenshots are genuine running-app captures, not recreated answers. Some owner screenshots include private draft wording; review before sharing. They are deliberately outside Git. No accepted customer transcript or successful follow-up screenshot exists for this rehearsal.
+
+After these two requests the authenticated prepaid dashboard displayed **$4.97**, with automatic top-up still disabled and no new purchase. The two uncached-rate token estimates total approximately **$0.01969**; dashboard cents are not an exact invoice. The approved six-request conservative ceiling remains **$0.4376775** ($0.44 rounded) within the original $5 authorization. Do not spend the reserved class attempts on recovery. Keep the real failed request visible in System status and use the labeled backup for an honest presentation of current results.
+
+## Earlier six-attempt preparation record — superseded by live results above
 
 This section supersedes the earlier three-attempt allowance below. On November 25 the owner approved a lifetime cap of **16**, retaining the historical **10**: at most three rehearsal attempts, then three presentation attempts. The authenticated provider dashboard freshly displayed **$4.99** prepaid credit, one original $5 purchase and disabled automatic top-up. At the checked global short-context rates ($1.25/M input, $2.50/M output), the enforced 48,000-byte payload/1,800-token output bounds plus system instruction and 4,096 framing allowance give **$0.07294625/request × 6 = $0.4376775**, rounded reserve **$0.44**, within the original $5 authorization. No purchase or billing setting changed.
 
