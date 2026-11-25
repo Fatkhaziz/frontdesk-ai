@@ -1,5 +1,36 @@
 # Fall Release 1 dealership showcase
 
+
+## Six-attempt rehearsal allowance — activation pending
+
+This section supersedes the earlier three-attempt allowance below. On November 25 the owner approved a lifetime cap of **16**, retaining the historical **10**: at most three rehearsal attempts, then three presentation attempts. The authenticated provider dashboard freshly displayed **$4.99** prepaid credit, one original $5 purchase and disabled automatic top-up. At the checked global short-context rates ($1.25/M input, $2.50/M output), the enforced 48,000-byte payload/1,800-token output bounds plus system instruction and 4,096 framing allowance give **$0.07294625/request × 6 = $0.4376775**, rounded reserve **$0.44**, within the original $5 authorization. No purchase or billing setting changed.
+
+The local private `.env` now has `AI_CALL_LIMIT=16`; every other byte is unchanged. The observed running server (PID 62092, this checkout) still reports **10 used / 13 total**, drafting **Ready**, Auth ready and PostgreSQL connected. This is the successful earlier restart, not activation of 16. A new restart must load the cap and the provider-input fix described next. No rehearsal request has been sent in this follow-up; the three presentation requests remain unspent.
+
+### Provider-input correction before rehearsal
+
+`backend/shopping.py` → `suggest()` previously sent existing questions from the private `knowledge_state()['cards']`. It now takes `existing_questions` solely from `catalog()['knowledge']`, which reads the published snapshot. The private revision remains local for concurrency/staleness checks; private answers, unpublished question edits and inquiry contacts are excluded from provider input. This changes no stored business information or publication. A canary regression inspects the mocked provider payload: the published question is included and the private question/answer are absent.
+
+The updated shopping suite passed **20 mocked-provider tests**; all **63 backend tests** passed; the production frontend build passed. Local frontend interaction tests cannot start because the existing `tsx` package entry is missing; no packages were installed. Earlier CI interaction tests remain historical mocked evidence, not a pass of this new live rehearsal. A first backend run suppressed logging and caused two logging assertions to fail; rerunning with normal logging passed all 63.
+
+### Real rehearsal backup record — NOT YET EXECUTED
+
+| Rehearsal action | Actual result / backup |
+| --- | --- |
+| Owner question suggestions | Pending restart; no new provider response, task or screenshot claimed |
+| Find my fit with Compact Hatch + City Hybrid | Pending; no new answer or source references claimed |
+| Follow-up changes $25,000 to $30,000, retains five seats/fuel economy | Pending; no live continuity result claimed |
+
+After activation, refresh actual System status before proceeding. Use the exact three-request sequence below as rehearsal attempts 11–13. Inspect each answer and its durable `ai_tasks` / `assistant_runs` evidence, and save clearly labeled real-response screenshots and a transcript/evidence backup; do not substitute historical or mocked outputs. Stop after three attempts even if any fail. Inspect failures without automatic retries. Expected ending usage after three reservations is **13/16**, leaving **three presentation attempts**. Owner suggestion references can be empty because the output is questions; inspect its published input snapshot. Customer references must match current same-business publications. The existing historical shopping run remains distinct. Full semantic correctness, physical mobile behavior, separate AI comparison and fair-price behavior are not established by these tests.
+
+Restart in the existing website Terminal after Ctrl+C:
+
+```sh
+cd '/Users/fatkhazizmukhamedov/Desktop/Gannon/7th semester/Senior Design/frontdesk-ai' && bash scripts/run-local.sh
+```
+
+The agent did not stop the server: automatic Terminal control was previously rejected and the command runner cannot bind loopback. No rejected Terminal-control attempt was repeated.
+
 **Current live state:** http://127.0.0.1:8000/ is running in the user's existing Mac Terminal. Real owner sign-in, knowledge save/review/publication, private/public separation, six published vehicles, calculated comparisons, consented shopping inquiry submission/status and System status were verified in Safari. The server was not stopped or restarted; no dependency installation or migration was repeated in this follow-up.
 
 Exactly one real Grok shopping request was sent after checking 9/10 attempts, the configured priced model, $5.00 rounded provider credit, disabled auto top-up and less than $0.01 prior spend across the original purchase period. The historical counter remains **10**, confirmed independently in System status and PostgreSQL. The owner subsequently approved a 13-attempt cap; its configuration and pending activation are documented below. No further AI request, retry, counter reset or purchase was made. Owner AI suggestions, another conversation turn, the separate AI comparison action and fair-price questions remain unverified live.
