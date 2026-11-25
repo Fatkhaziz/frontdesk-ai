@@ -85,7 +85,7 @@ git diff --check
 
 62 backend tests pass locally using isolated SQLite with foreign keys enabled and injected Auth/AI. [Maintenance CI](https://github.com/Fatkhaziz/frontdesk-ai/actions/runs/45528060342) passed 62 backend tests on both Python 3.9 and 3.12, all nine frontend interaction tests, the strict production build, disposable PostgreSQL checks and all three rendered Chromium workflows. These use mocked Auth/Grok, not the real configured services. The local production build passed; full local frontend tests remain blocked by unavailable test dependencies in the restricted runner. No lint/format script existed; the build includes strict TypeScript checks. Optional `scripts/check-browser.py` uses Playwright/Chromium, a temporary SQLite database and mocked Auth/Grok on loopback port 8001 to rehearse the full owner/public/delete workflow at desktop/mobile sizes. Install browser tooling outside the repository's tracked artifacts; run with the project root on `PYTHONPATH`. Automated tests never load `.env` or call paid xAI.
 
-These mocks are not real integration evidence. Earlier handoffs describe historical provider checks; this continuation made no paid requests and does not attribute new metadata to historical records. Real Safari sign-in must use the owner's credentials privately.
+These mocks are not real integration evidence. Earlier handoffs describe historical provider checks; the PR #3 setup stage made no paid requests and did not attribute new metadata to historical records. The subsequent real-browser follow-up used the final authorized attempt; see the release guide’s current verification checkpoint. Real Safari sign-in must use the owner's credentials privately.
 
 ## Deployment and limits
 
