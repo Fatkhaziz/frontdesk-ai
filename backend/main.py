@@ -6,7 +6,7 @@ import traceback
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -89,13 +89,13 @@ class Facts(Strict):
     price: int = Field(ge=0,le=1000000000,description='USD cents')
     mileage: int = Field(ge=0,le=10000000)
     availability: Literal['available','reserved','sold'] = 'available'
-    body_style: Literal['sedan','suv','hatchback','truck','coupe','wagon','van'] | None = None
-    fuel_type: Literal['gasoline','diesel','hybrid','electric','plug_in_hybrid'] | None = None
-    drivetrain: Literal['fwd','rwd','awd','4wd'] | None = None
-    transmission: Literal['automatic','manual'] | None = None
-    seats: int | None = Field(default=None,ge=1,le=15)
-    mpg_combined: float | None = Field(default=None,gt=0,le=150)
-    cargo_cubic_feet: float | None = Field(default=None,gt=0,le=500)
+    body_style: Optional[Literal['sedan','suv','hatchback','truck','coupe','wagon','van']] = None
+    fuel_type: Optional[Literal['gasoline','diesel','hybrid','electric','plug_in_hybrid']] = None
+    drivetrain: Optional[Literal['fwd','rwd','awd','4wd']] = None
+    transmission: Optional[Literal['automatic','manual']] = None
+    seats: Optional[int] = Field(default=None,ge=1,le=15)
+    mpg_combined: Optional[float] = Field(default=None,gt=0,le=150)
+    cargo_cubic_feet: Optional[float] = Field(default=None,gt=0,le=500)
     features: list[str] = Field(default_factory=list,max_length=20)
     synthetic: bool = False
 

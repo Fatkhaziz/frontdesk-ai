@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 import uuid
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -23,10 +23,10 @@ class Strict(BaseModel):
 
 
 class Preferences(Strict):
-    budget_cents: int | None = Field(default=None, ge=0, le=1000000000, strict=True)
+    budget_cents: Optional[int] = Field(default=None, ge=0, le=1000000000, strict=True)
     budget_kind: Literal['vehicle', 'total', 'unknown'] = 'unknown'
-    min_seats: int | None = Field(default=None, ge=1, le=15, strict=True)
-    max_mileage: int | None = Field(default=None, ge=0, le=10000000, strict=True)
+    min_seats: Optional[int] = Field(default=None, ge=1, le=15, strict=True)
+    max_mileage: Optional[int] = Field(default=None, ge=0, le=10000000, strict=True)
     body_style: Literal['any', 'sedan', 'suv', 'hatchback', 'truck', 'coupe', 'wagon', 'van'] = 'any'
     fuel_type: Literal['any', 'gasoline', 'diesel', 'hybrid', 'electric', 'plug_in_hybrid'] = 'any'
     drivetrain: Literal['any', 'fwd', 'rwd', 'awd', '4wd'] = 'any'
@@ -385,7 +385,15 @@ def create_router(identity, owner):
     @router.get('/api/assistant/evidence')
     def evidence(member=Depends(owner)):
         with connect() as c:
-            rows = execute(c, 'SELECT r.*,t.model,t.created_at FROM assistant_runs r JOIN ai_tasks t ON t.id=r.task_id AND t.business_id=r.business_id WHERE r.business_id=%s ORDER BY t.created_at DESC LIMIT 30', (member['business_id'],)).fetchall()
-        return [{**dict(r), **{k: json.loads(r[k]) if r[k] else None for k in ('source_snapshot', 'source_ids', 'token_usage')}} for r in rows]
+            rows = execute(c, 'SELECT r.*,t.model,t.usage AS task_usage,t.created_at FROM assistant_runs r JOIN ai_tasks t ON t.id=r.task_id AND t.business_id=r.business_id WHERE r.business_id=%s ORDER BY t.created_at DESC LIMIT 30', (member['business_id'],)).fetchall()
+        result = []
+        for r in rows:
+            usage = json.loads(r['task_usage']) if r['task_usage'] else {}
+            # Older rows do not acquire a claimed provider model retroactively.
+            result.append({**{k: v for k, v in dict(r).items() if k != 'task_usage'},
+                           **{k: json.loads(r[k]) if r[k] else None for k in ('source_snapshot', 'source_ids', 'token_usage')},
+                           'requested_model': usage.get('requested_model', r['model']),
+                           'provider_model': usage.get('provider_model')})
+        return result
 
     return router

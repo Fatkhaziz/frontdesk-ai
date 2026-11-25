@@ -51,7 +51,7 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
         execute(c, 'INSERT INTO assistant_runs(task_id,business_id,request_id,operation,source_snapshot,provider_outcome,application_outcome) VALUES(%s,%s,%s,%s,%s,%s,%s)',
                 (task, business, request_id, operation, json.dumps(sources), 'started', 'pending'))
     started = time.monotonic()
-    provider, application, provider_id, usage, refs = 'failed', 'provider_error', None, {}, []
+    provider, application, provider_id, provider_model, usage, refs = 'failed', 'provider_error', None, None, {}, []
     try:
         body = provider_call(instruction, payload)
         provider = 'succeeded'
@@ -59,6 +59,9 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
         raw_id = body.get('id')
         if isinstance(raw_id, str) and re.fullmatch(r'[\w.-]{1,200}', raw_id) and raw_id != key and not re.search(r'bearer|password|secret|xai-|sk-', raw_id, re.I):
             provider_id = raw_id
+        raw_model = body.get('model')
+        if isinstance(raw_model, str) and re.fullmatch(r'grok-[A-Za-z0-9._-]{1,120}', raw_model) and raw_model != key:
+            provider_model = raw_model
         raw_usage = body.get('usage') or {}
         if isinstance(raw_usage, dict):
             usage = {k: v for k, v in raw_usage.items() if k in ('prompt_tokens', 'completion_tokens', 'total_tokens') and type(v) is int and v >= 0}
@@ -79,7 +82,7 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
     finally:
         elapsed = int((time.monotonic() - started) * 1000)
         with connect() as c:
-            execute(c, 'UPDATE ai_tasks SET status=%s,duration_ms=%s,usage=%s WHERE id=%s AND business_id=%s',
-                    (provider, elapsed, json.dumps({**usage, 'provider_response_id': provider_id}), task, business))
+            execute(c, 'UPDATE ai_tasks SET model=%s,status=%s,duration_ms=%s,usage=%s WHERE id=%s AND business_id=%s',
+                    (provider_model or model, provider, elapsed, json.dumps({**usage, 'provider_response_id': provider_id, 'requested_model': model, 'provider_model': provider_model}), task, business))
             execute(c, 'UPDATE assistant_runs SET source_ids=%s,provider_response_id=%s,token_usage=%s,latency_ms=%s,provider_outcome=%s,application_outcome=%s WHERE task_id=%s AND business_id=%s',
                     (json.dumps(refs if application == 'accepted' else []), provider_id, json.dumps(usage), elapsed, provider, application, task, business))
