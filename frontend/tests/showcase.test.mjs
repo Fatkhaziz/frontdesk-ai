@@ -46,3 +46,46 @@ test('owner AI suggestions stay unsaved and cannot publish without approval',asy
  assert.equal(field('Customer question').value,'What warranty applies?');assert.equal(field('Owner-provided answer').value,'');
  assert.equal(button('Publish reviewed knowledge').disabled,true);assert.equal(calls.filter(c=>c.method==='PUT'||c.path.endsWith('/publish')).length,0);
 });
+
+test('explicit answer review saves approval and later edits keep the published answer separate',async()=>{
+ let state={revision:0,published_revision:null,cards:[]},published=[];const calls=[];
+ const api=async(path,method,body)=>{
+  calls.push({path,method,body});
+  if(method==='PUT')state={...state,revision:state.revision+1,cards:structuredClone(body.cards)};
+  if(path.endsWith('/publish')){published=structuredClone(state.cards);state={...state,published_revision:state.revision};}
+  return structuredClone(state);
+ };
+ await act(async()=>root.render(h(KnowledgeSetup,{key:'explicit-review',api,run:async(fn)=>fn(),busy:false,notify:()=>{},businessId:'a'})));
+ await click(button('+ Add a question'));assert.equal(button('Approve this answer').disabled,true);
+ await fill(field('Customer question'),'Are these examples fictional?');await fill(field('Owner-provided answer'),'These are fictional demonstration vehicles.');
+ await click(button('Approve this answer'));assert.equal(field('How should the receptionist handle it?').value,'approved');
+ await click(button('Save private knowledge'));assert.equal(state.cards[0].status,'approved');assert.equal(published.length,0);
+ assert.equal(button('Publish reviewed knowledge').disabled,true);
+ await click(document.querySelector('.publish-panel input[type="checkbox"]'));await click(button('Publish reviewed knowledge'));
+ assert.equal(published[0].answer,'These are fictional demonstration vehicles.');
+ await fill(field('Owner-provided answer'),'Private edit for later review.');assert.equal(field('How should the receptionist handle it?').value,'draft');
+ assert.equal(button('Publish reviewed knowledge').disabled,true);await click(button('Save private knowledge'));
+ assert.equal(state.revision,2);assert.equal(state.published_revision,1);assert.equal(published[0].answer,'These are fictional demonstration vehicles.');
+ assert.equal(calls.filter(c=>c.path.endsWith('/publish')).length,1);
+});
+
+test('Find my fit carries selected vehicles and staff submission never displays AI activity',async()=>{
+ const calls=[];let finishInquiry;
+ const api=async(path,method,body)=>{
+  calls.push({path,method,body});if(!method)return inventory;
+  if(path.endsWith('/inquiries'))return new Promise(resolve=>{finishInquiry=resolve;});
+  return {preferences:prefs,answer:'These are the selected examples.',follow_up:'What matters most?',recommended_ids:[],matches:[],sources:[],mode:'live_ai'};
+ };
+ await act(async()=>root.render(h(PublicShop,{key:'selected-handoff',id:'a',api,config})));
+ for(const input of document.querySelectorAll('.inventory-card input[type="checkbox"]'))await click(input);
+ await click(button('Find my fit'));await fill(field('Your message'),'Compare my selected vehicles.');await submit(field('Your message').closest('form'));
+ assert.deepEqual(calls.find(c=>c.path.endsWith('/assist')).body.selected_ids,['a','b']);
+ await click(button('Ask staff to follow up'));await fill(field('Email or phone for follow-up'),'class-test@example.invalid');
+ await click(document.querySelector('.staff-help input[type="checkbox"]'));await submit(field('Email or phone for follow-up').closest('form'));
+ assert.equal(typeof finishInquiry,'function');assert.equal(button('Send inquiry to staff').disabled,true);
+ assert.equal(button('Thinking…'),undefined);assert.equal(document.body.textContent.includes('Checking published information…'),false);
+ assert.equal(calls.filter(c=>c.path.endsWith('/assist')).length,1);
+ assert.deepEqual(calls.find(c=>c.path.endsWith('/inquiries')).body.listing_ids,['a','b']);
+ await act(async()=>finishInquiry({id:'synthetic-inquiry',status:'open'}));
+ assert.equal(document.body.textContent.includes('Inquiry saved in the staff inbox.'),true);
+});

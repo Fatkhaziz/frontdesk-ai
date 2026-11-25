@@ -97,6 +97,7 @@ export default function PublicShop({
     [question, setQuestion] = useState(""),
     [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false),
+    [aiBusy, setAiBusy] = useState(false),
     [comparison, setComparison] = useState<any>(null),
     [recommended, setRecommended] = useState<string[]>([]),
     [matches, setMatches] = useState<string[] | null>(null);
@@ -119,16 +120,17 @@ export default function PublicShop({
   useEffect(() => {
     const container = chatEnd.current?.parentElement;
     if (container) container.scrollTop = container.scrollHeight;
-  }, [messages, busy]);
+  }, [messages, aiBusy]);
   useEffect(() => {
     const resize = () => setPreferencesOpen(window.innerWidth > 720);
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
-  async function work(fn: () => Promise<void>) {
+  async function work(fn: () => Promise<void>, isAi = false) {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
+    setAiBusy(isAi);
     setError("");
     setNotice("");
     try {
@@ -140,6 +142,7 @@ export default function PublicShop({
     } finally {
       lock.current = false;
       setBusy(false);
+      setAiBusy(false);
     }
   }
   function choose(lid: string) {
@@ -205,7 +208,7 @@ export default function PublicShop({
         message: text,
         preferences: currentPrefs(),
         history,
-        selected_ids: tab === "Compare" ? selected : [],
+        selected_ids: selected,
       });
       setPreferences(r.preferences);
       setFeaturesText(r.preferences.required_features.join(", "));
@@ -249,7 +252,7 @@ export default function PublicShop({
       setNotice(
         "Answer received from live AI and checked against published source IDs. Review the facts and limitations below.",
       );
-    });
+    }, true);
   }
   function prepareFollowup() {
     setShowFollowup(true);
@@ -803,7 +806,7 @@ export default function PublicShop({
                     </div>
                   </article>
                 ))}
-                {busy && <p role="status">Checking published information…</p>}
+                {aiBusy && <p role="status">Checking published information…</p>}
                 <div ref={chatEnd} />
               </div>
               {recommended.length > 0 && (
@@ -848,7 +851,7 @@ export default function PublicShop({
                   className="primary"
                   disabled={busy || !ai || !question.trim()}
                 >
-                  {busy ? "Thinking…" : "Send to AI"}
+                  {aiBusy ? "Thinking…" : "Send to AI"}
                 </button>
                 <small>
                   Each send or explanation uses a paid request, subject to the

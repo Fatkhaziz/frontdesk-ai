@@ -223,6 +223,20 @@ export default function KnowledgeSetup({
                 independently verify a document.
               </small>
             </label>
+            <div className="actions" aria-label={`Review question ${index + 1}`}>
+              <button
+                disabled={busy || !c.answer.trim() || c.status === "approved"}
+                onClick={() => change(c.id, { status: "approved" })}
+              >
+                {c.status === "approved" ? "Answer approved" : "Approve this answer"}
+              </button>
+              <button
+                disabled={busy || c.status === "staff"}
+                onClick={() => change(c.id, { status: "staff" })}
+              >
+                {c.status === "staff" ? "Routed to staff" : "Staff must answer"}
+              </button>
+            </div>
           </article>
         ))}
       </div>
