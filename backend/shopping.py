@@ -266,6 +266,20 @@ def validate_answer(result, data, body, sources):
         limit = 1400 if key == 'answer' else 240
         if not isinstance(result[key], str) or len(result[key]) > limit or (key == 'answer' and not result[key].strip()):
             raise Rejection('shape', 'answer', key)
+    # A structured response may not simply ignore an unambiguous hard need.
+    # These narrow patterns supplement model extraction; ambiguous language is
+    # still clarified rather than guessed ("family car" is not a seat count).
+    budget_mentions = list(re.finditer(r'\b(?:my\s+(?:(?:vehicle[ -]price|vehicle|total|out.the.door)\s+)?budget\s*(?:is|to|of|:|=)?|(?:raise|increase|lower|change|set)\s+(?:my\s+)?(?:(?:vehicle[ -]price|vehicle|total)\s+)?budget\s+to)\s*\$?\s*(\d[\d,]{0,14}(?:\.\d{1,2})?)(k\b)?(?![\d,])', body.message, re.I))
+    amounts = {round(float(m.group(1).replace(',', '')) * (1000 if m.group(2) else 1) * 100) for m in budget_mentions}
+    if len(amounts) == 1 and prefs.budget_cents != next(iter(amounts)):
+        raise Rejection('preferences', 'missing_explicit_requirement', 'budget_cents')
+    seat_words = {'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7,'eight':8,'nine':9,'ten':10,'eleven':11,'twelve':12}
+    seats = re.search(r'\b(?:need|require|at least|minimum(?: of)?|retain)\s+(?:at least\s+)?(\d{1,2}|' + '|'.join(seat_words) + r')[ -]+(?:seats?|seaters?|passengers?)\b', body.message, re.I)
+    if seats and not re.search(r'\b(?:not|never|no longer|don.t|may|might|maybe)\s*$', body.message[:seats.start()], re.I):
+        word = seats.group(1).lower()
+        expected_seats = int(word) if word.isdigit() else seat_words[word]
+        if prefs.min_seats != expected_seats:
+            raise Rejection('preferences', 'missing_explicit_requirement', 'min_seats')
     refs, ids = result['source_ids'], result['recommended_ids']
     if not isinstance(refs, list) or len(refs) > 30 or any(not isinstance(x, str) for x in refs) or len(set(refs)) != len(refs):
         raise Rejection('sources', 'sources', 'source_ids')

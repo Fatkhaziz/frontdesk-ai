@@ -68,6 +68,12 @@ class Shopping(unittest.TestCase):
         bad={**result,'answer':'1. It has seven seats.'}
         self.assertEqual(self.ask(bad,message='I need five seats').status_code,503)
 
+    def test_explicit_budget_or_seats_cannot_be_ignored(self):
+        self.assertEqual(self.ask(self.result(),message='My vehicle-price budget is $25,000').status_code,503)
+        self.assertEqual(self.ask(self.result(),message='I need five seats').status_code,503)
+        row=self.client.get('/api/assistant/evidence').json()[0]
+        self.assertEqual(row['rejection']['reason'],'missing_explicit_requirement')
+
     def test_comparison_uses_public_facts_and_exact_cent_arithmetic(self):
         self.client.patch('/api/listings/'+self.ids[0],json={'facts':{**self.facts,'price':9990000},'description':'PRIVATE-CANARY','expected_revision':1})
         r=self.client.post('/api/shop/a/compare',json={'listing_ids':self.ids,'preferences':{'budget_cents':2500000,'budget_kind':'vehicle'}})

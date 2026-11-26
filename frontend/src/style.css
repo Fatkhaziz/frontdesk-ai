@@ -1292,7 +1292,7 @@ input:not([type="checkbox"]), textarea, select { color: #182d3d; border-color: #
 .dashboard-heading h1 { font-size: 30px; margin-bottom: 0; }
 .dashboard-heading .eyebrow { margin-bottom: 6px; }
 nav { border-color: #dce3e9; margin-bottom: 22px; padding-bottom: 14px; gap: 6px; }
-.owner-app > nav { position: sticky; top: 0; z-index: 10; background: #f4f6f9; padding-top: 10px; }
+.owner-app > nav { background: #f4f6f9; padding-top: 10px; }
 nav button { border-color: transparent; background: transparent; }
 nav button:not(.active):hover { background: #e7edf3; }
 .count { background: #e5eff1; color: #284d5c; }

@@ -1,94 +1,56 @@
 # FrontDesk AI
 
-FrontDesk AI is an AI receptionist platform for small businesses. The [November 19 requirements](docs/requirements.md) and [aligned detailed design](docs/detailed-design.md) address the professors' annotated feedback, including multiple business domains, business-specific rules, four roles and dealership operations. [Implementation work and evidence](docs/professor-feedback-implementation.md) describe the gaps between that specification and the current code. Earlier Word/PDF snapshots in this folder are historical design references.
+A small-business receptionist project. Fall Release 1 demonstrates a dealership: owner-assisted knowledge preparation, reviewed publication, published vehicle comparison, personalized AI shopping and explicit staff handoff. The final scope includes dealership, salon and photography workflows.
 
-## Current fall showcase
+## Current release
 
-Following the November 24 faculty discussion, the 20% showcase focuses on a dealership with concrete AI use: **owner question suggestions and knowledge preparation**, **conversational customer preferences**, and **personalized vehicle comparison**. The final product remains a small-business platform. Existing salon/studio configuration code is retained for later development.
+Code implements the AI gateway and validation repairs, searchable owner listings, selected-vehicle comparison, accepted-conversation export and protected practice allowance. Automated checks use mocked providers. **The latest real customer first turn and follow-up still require acceptance on the configured Mac.** Earlier failed completions are not relabeled as successful answers.
 
-Start with the [current release guide](docs/showcase-release.md). It includes one-command Mac setup, the exact presentation sequence, code/database maps, API/password evidence and real-service verification limits. Earlier handoffs and Word snapshots describe prior scope and are historical where they conflict with that guide.
+- [Complete requirements, use cases and measurable targets](docs/requirements.md)
+- [Current technical design and code/data map](docs/detailed-design.md)
+- [Practice and live verification guide](docs/showcase-release.md)
+- [Read-only password and AI evidence queries](docs/evidence-queries.sql)
+- [20-minute presentation with speaking notes](docs/presentation-notes.md)
+- [Presentation slide file copy](docs/FrontDesk_AI_End_of_Semester_Presentation.pdf)
+- [Practice guide in Word](docs/FrontDesk_AI_Practice_Showcase_and_Technical_Guide.docx)
+- [Team project report](docs/FrontDesk_AI_Team_Project_Report.docx)
+- [Current requirements in Word](docs/FrontDesk_AI_Requirements_Use_Cases_and_Constraints.docx)
+- [Current detailed design in Word](docs/FrontDesk_AI_Detailed_System_Design_v6.docx)
 
-```sh
-# In the existing configured Mac checkout, after pulling the release:
-bash scripts/setup-showcase.sh --with-examples
+## Start in the existing configured Mac checkout
+
+Pull the merged main branch. Stop the earlier server in its Terminal with Control+C. Keep the existing private `.env` and certificates; never commit them. Then run:
+
+```bash
+bash scripts/launch-showcase.sh
 ```
 
-The owner dashboard has **Listings**, **Owner knowledge**, **Inquiries** and **System status**. **Open customer inventory** opens `/shop/{business_id}` with Inventory, Find my fit and Compare. Four explicitly fictional vehicles can be added without overwriting existing rows. AI actions are explicit; browsing/comparison/status checks do not call xAI. Keep the existing total $5 authorization and shared attempt cap under review; setup does not reset or raise it.
+Open http://127.0.0.1:8000/ and sign in privately. Listings → Open customer inventory opens the matching public page. Keep the server Terminal open.
 
-## Local configuration
+The launcher applies additive migration 006, checks existing-row preservation, builds and starts the app. It makes **no inference request**. Historical usage is preserved. The shared conservative ledger limits preparation to $1.00 from the owner-declared $4.97 remaining allowance and protects at least $3.50 while preparation mode is active. An attempt count is not the provider dollar balance. Verify actual credit separately. No purchases, top-ups, counter resets or automatic paid retries occur.
 
-Use a local `.env` copied from `.env.example`; never commit credentials. `.env`, `.certs/`, `.venv/`, `frontend/node_modules/`, and `frontend/dist/` are ignored. Runtime configuration exposes only the Supabase public URL/key to the browser.
+For a deliberate three-turn real integration check, use `bash scripts/launch-showcase.sh --practice --verify-live`. It stops at the first failure, never retries, and saves synthetic raw responses privately on the Desktop for diagnosis. It does not prove browser sign-in.
 
-| Setting | Purpose |
-| --- | --- |
-| `DATABASE_URL` | Supabase session-pooler PostgreSQL URL with `sslmode=verify-full` and an absolute readable `sslrootcert` path. Percent-encode path spaces as `%20`, not `+`. Keep the CA in ignored `.certs/`. |
-| `SUPABASE_URL` | Project HTTPS URL. `VITE_SUPABASE_URL` is accepted as a fallback. |
-| `SUPABASE_PUBLISHABLE_KEY` | Public publishable or legacy anon key. Never a service-role/secret key. `VITE_SUPABASE_PUBLISHABLE_KEY` is a fallback. |
-| `XAI_API_KEY` | Backend-only funded xAI key. |
-| `XAI_MODEL` | Exact available text-model ID. Legacy drafting checks the catalog; showcase requests use the configured model and fail safely if unavailable. |
-| `QUESTION_MODE` | `demo`: AI disabled for the showcase; `ai`: enables explicit shopping and owner-question AI requests when provider settings exist. Legacy vehicle Q&A remains narrower. |
-| `DRAFT_AI_ENABLED` | `1` enables paid listing drafts, `0` disables them. If omitted, follows question mode. |
-| `AI_CALL_LIMIT` | Hard project-wide lifetime attempt cap, including failed attempts. Local demo: 10. Not a dollar-balance meter. |
+Before the presentation, the owner can deliberately launch:
 
-Do not place xAI/database secrets in a `VITE_` variable. The configured model is `grok-4.20-0309-non-reasoning`. Legacy vehicle inference has a 200-token output cap; new showcase inference has an 1,800-token output cap and a 48,000-byte payload bound. No automatic retry. The customer explicitly sends conversation context/preferences to xAI; staff inquiry contacts are kept out of AI payloads. The input filter rejects common credential/contact patterns but is not a universal personal-data detector.
-
-## Database setup
-
-A confirmed Supabase email/password user must already have an active owner/staff membership. No public business creation or role-management endpoint exists in this bounded demo. Only an owner can publish, unpublish, delete, or view system diagnostics. Staff can prepare drafts and handle inquiries. All private routes verify Supabase identity and business membership.
-
-For a new database, load the environment privately and run:
-
-```sh
-python -m backend.migrate
-python -m backend.check_connection
+```bash
+bash scripts/launch-showcase.sh --presentation
 ```
 
-Migrations are atomic, serialized, and checksum-tracked. An existing manually created untracked schema is refused for review; do not recreate/reset it. `001_demo.sql` defines the existing data; additive `002_listing_ai_tasks.sql` links new AI requests to listings for safe deletion. Migrations 001 and 002 were applied in the earlier Supabase demo. Additive `003_business_reception.sql` creates business profiles, service inquiries and publication events; `004_ai_interaction_evidence.sql` adds provenance for new business Q&A attempts. Apply pending migrations before starting this updated application. Migrations 003/004 were verified on the configured Mac on November 24. New `005_shopping_assistant.sql` adds reviewed owner knowledge, publication events, shopping inquiries and correlated showcase AI runs; apply it before starting this release. Migration 005 and its checksum are now verified live through the configured Supabase dashboard; four authorized fictional vehicles were added while all pre-existing rows were preserved. The live shopping verification used the final attempt; the confirmed counter is now 10/10. Owner publication, private/public separation, inquiry status and durable Grok evidence were verified in the running site; see the release guide for precise limits. Provision the business/membership using parameterized administration or the Supabase SQL editor with the actual confirmed Auth UUID. Browser database roles have no application-table grants.
+This changes the existing ledger phase, without granting new credit or clearing reservations.
 
-## Build and run
+## Verification
 
-Python 3.9+ (3.12 recommended) and Node 22+:
-
-```sh
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-npm ci --prefix frontend
-npm run build --prefix frontend
-bash scripts/run-local.sh
-```
-
-The launcher loads the project's `.env`, verifies the CA path and TLS mode, checks PostgreSQL, then serves http://127.0.0.1:8000/. Stop the existing server before restarting. Rebuild after frontend changes; restart after backend/environment changes. Do not assume an earlier detached server is current. Stop the old process and run the setup/start command from the current checkout.
-
-## Interface and publication
-
-The owner dashboard defaults to **Listings**, with separate **Inquiries** and **System status** sections. Latest published vehicles sort first; the latest published 2022 Toyota Camry is the default selection. Duplicate vehicle names are labeled for review; nothing is automatically deleted. Selection is remembered within the browser tab using only the listing ID. Auth tokens stay in memory; reloading requires sign-in and fetches records again.
-
-The editor has three switchable stages: **Vehicle details**, **AI description**, **Review and publish**. Prices are entered in dollars and converted to integer cents only when building the API payload. Client and server validation reject invalid facts with friendly messages. Grok and the non-AI formatter are distinctly labeled. Generated text remains private and editable. Only explicit owner approval of the exact saved revision permits publication. Unsaved/private edits cannot change the public snapshot. A prominent **View public page** button follows publication; unpublish/delete are separate management actions.
-
-Public listings show approved facts and description, conversation-style Q&A, and voluntary staff handoff. Supported questions include `Price?`, `Mileage?`, `Price and mileage?`, `What is the price?`, and `How many miles does it have?`. In live mode, Grok's field classification must agree with the bounded scope; FastAPI re-reads the published snapshot and builds the final price/mileage answer. Unsupported/mixed/ambiguous inputs, invalid AI output, and provider failures offer handoff. Availability and accident history are outside customer Q&A scope. Successful inquiry submission means saved in the staff inbox; no email/phone notification is claimed.
-
-**System status** shows validated Auth, database readiness, drafting state, question mode, used/limit, backend health, and last successful model/token usage/time. Detailed diagnostics are collapsed and owner-only. `/health` is process health only; `/docs` describes the API.
-
-## Safe listing deletion
-
-`DELETE /api/listings/{id}` requires owner membership in the listing's business. A single database transaction locks the parent and removes inquiries, linked AI tasks, publication audit entries, and the listing row (including saved revision, approval and public snapshot). Foreign keys enforce relationships; any failure rolls back. The lifetime AI counter remains unchanged. Legacy AI tasks predating migration 002 have no provable listing link and are retained as business-level logs. No current demo record has been automatically deleted. The UI confirms the vehicle name before deletion.
-
-## Checks
-
-```sh
-python -m unittest discover -s tests -v
+```bash
+.venv/bin/python -m unittest discover -s tests -v
 npm test --prefix frontend
 npm run build --prefix frontend
-git diff --check
 ```
 
-62 backend tests pass locally using isolated SQLite with foreign keys enabled and injected Auth/AI. [Maintenance CI](https://github.com/Fatkhaziz/frontdesk-ai/actions/runs/45531775835) passed 62 backend tests on both Python 3.9 and 3.12, all 11 frontend interaction tests, the strict production build, disposable PostgreSQL checks and all three rendered Chromium workflows. These use mocked Auth/Grok, not the real configured services. The local production build passed; full local frontend tests remain blocked by unavailable test dependencies in the restricted runner. No lint/format script existed; the build includes strict TypeScript checks. Optional `scripts/check-browser.py` uses Playwright/Chromium, a temporary SQLite database and mocked Auth/Grok on loopback port 8001 to rehearse the full owner/public/delete workflow at desktop/mobile sizes. Install browser tooling outside the repository's tracked artifacts; run with the project root on `PYTHONPATH`. Automated tests never load `.env` or call paid xAI.
+The release has 79 backend and 12 frontend tests. [CI run 45899218929](https://github.com/Fatkhaziz/frontdesk-ai/actions/runs/45899218929) passed Python 3.9/3.12, a disposable PostgreSQL upgrade preserving legacy records, and rendered desktop/mobile workflows with simulated Auth/Grok. CI does not establish real sign-in, live inference quality or production readiness.
 
-These mocks are not real integration evidence. Earlier handoffs describe historical provider checks; the PR #3 setup stage made no paid requests and did not attribute new metadata to historical records. The subsequent real-browser follow-up used the final authorized attempt; see the release guide’s current verification checkpoint. Real Safari sign-in must use the owner's credentials privately.
+The actual model call is `provider_call` in `backend/showcase_ai.py`. Newer evidence is `ai_tasks` joined to `assistant_runs`; older business-profile Q&A uses `ai_interaction_evidence`. Inquiries are separate customer work. Password hashes are managed by Supabase Auth in `auth.users.encrypted_password`; `memberships` contains business authorization, not passwords.
 
-## Deployment and limits
+## Final-system scope
 
-The existing Docker/Render configuration serves the built frontend and backend as one web service. Supply secure runtime settings, apply migrations before starting updated code, and verify the hosted flow before claiming deployment. The earlier handoff records that local run. This continuation prepares source for review; it does not start the user’s Mac server or deploy to Render.
-
-This is a bounded demo, not an open public service. It has a project attempt cap rather than full token-cost accounting or per-client rate limiting. Keep it on loopback for presentation. Retention jobs, load testing, user trials, real Safari automation, photos, and spring features remain outside this preparation. The [handoff](docs/local-demo-handoff.md) distinguishes completed checks from those limits.
+Four roles and departments, resource bookings, phone reception, reminders, subscription sandbox, full dealership operations and complete salon/studio workflows remain the spring plan. Current table access is restricted through backend checks and revoked browser-role grants; RLS policies, enforced MFA, retention jobs and public rate limiting are not claimed implemented. SQLite is an isolated test adapter, not the deployment database. The current Mac application host will be replaced by a hosted HTTPS service; Grok and Supabase are already external services.

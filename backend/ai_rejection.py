@@ -4,7 +4,7 @@ REASONS = {'provider_timeout', 'provider_rate_limit', 'provider_http_error', 'pr
            'invalid_envelope', 'incomplete_output', 'invalid_json', 'shape', 'answer',
            'invalid_preferences', 'sources', 'unapproved_source', 'recommendations',
            'hard_constraint', 'unselected_recommendation', 'uncited_recommendation',
-           'invented_preference', 'removed_constraint', 'invented_feature_requirement',
+           'invented_preference', 'missing_explicit_requirement', 'removed_constraint', 'invented_feature_requirement',
            'removed_feature_requirement', 'unsupported_number', 'unsupported_guarantee',
            'stale_source', 'question_shape', 'question_length', 'questions', 'internal_error'}
 FIELDS = {'answer', 'follow_up', 'preferences', 'source_ids', 'recommended_ids', 'questions',
