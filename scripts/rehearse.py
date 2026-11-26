@@ -37,7 +37,7 @@ def main():
 
         with connect() as connection:
             connection.executescript(Path('migrations/001_demo.sql').read_text().split('-- Application data')[0] + 'COMMIT;')
-            for migration in ['002_listing_ai_tasks.sql', '003_business_reception.sql', '004_ai_interaction_evidence.sql', '005_shopping_assistant.sql']:
+            for migration in [p.name for p in sorted(Path('migrations').glob('*.sql')) if p.name != '001_demo.sql']:
                 connection.executescript(Path('migrations', migration).read_text().split('REVOKE')[0] + 'COMMIT;')
             for business_id, name in [('rehearsal-motors', 'Demo Motors'), ('rehearsal-salon', 'Demo Salon'), ('rehearsal-studio', 'Demo Studio')]:
                 execute(connection, 'INSERT INTO businesses VALUES(%s,%s)', (business_id, name))
