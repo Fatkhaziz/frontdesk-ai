@@ -8,7 +8,7 @@ Fatkhaziz Mukhamedov, Al Baraa Khaled, Mohammad Abdullah, Amar Al Balkhi
 
 ## 1 Scope and architectural decisions
 
-This design implements the revised FrontDesk AI Requirements Use Cases and Constraints dated November 19, 2026. The target is one hosted platform serving businesses in different domains with shared receptionist services and separate operating rules. The configured examples are a dealership, salon and photography studio. The current dealership demo is a working subset. New entities, endpoints and workflows below are implementation designs.
+This design implements the revised FrontDesk AI Requirements Use Cases and Constraints dated November 26, 2026. The target is one hosted platform serving businesses in different domains with shared receptionist services and separate operating rules. The configured examples are a dealership, salon and photography studio. The current dealership demo is a working subset. New entities, endpoints and workflows below are implementation designs.
 
 The architecture retains React and TypeScript, a modular Python FastAPI backend, Supabase PostgreSQL/Auth/storage and server-side xAI requests. Shared modules handle administration, configuration, approval, reception, resources, inquiries, delivery and evidence. Domain modules provide fields and rules. A separate worker executes durable reminder, notification, synchronization and retention jobs.
 
@@ -26,13 +26,12 @@ The final hosted website runs on a hosted service such as Render. The local Mac 
 | AI gateway | Build minimal prompts, validate structured output, enforce usage and record outcomes | Output is untrusted input. The backend retrieves approved values and performs authorized actions. |
 | Worker and provider adapters | Deliver notices, process signed events, reconcile jobs and purge expired content | External calls use bounded retries and stable event IDs. Completion follows verified outcomes. |
 
-FIGURE_ARCHITECTURE
 
 ## 3 Identity and business isolation
 
 There are four user roles in the requirements. Platform administrators have separate platform grants. Business administrators and domain staff have scoped memberships. Public customers select a business by an approved slug, listing link or called number. Private customer records require a verified management token or contact code.
 
-Supabase Auth owns sign-in and password verification. Its password security documentation states that password hashes use bcrypt [1]. The application stores a user subject reference and permissions, with no password column. Privileged access requires an MFA session assurance level of aal2 in addition to the current membership check [2]. Session inactivity and throttling targets are verified in the application and chosen provider configuration.
+Supabase Auth owns sign-in and password verification. Its password security documentation states that password hashes use bcrypt [L1]. The application stores a user subject reference and permissions, with no password column. Privileged access requires an MFA session assurance level of aal2 in addition to the current membership check [L2]. Session inactivity and throttling targets are verified in the application and chosen provider configuration.
 
 The backend resolves business_id from a trusted membership or a public resource lookup, then adds business and department predicates to every query. Child records use composite foreign keys to prevent linking one business's inquiry, booking or vehicle to another's record. A platform role cannot be assigned through a business invitation. A support session has actor, business, purpose, start, expiry and audit records.
 
@@ -67,7 +66,6 @@ The current migration contract includes those original business, membership, lis
 | Delivery and evidence | outbox_jobs, delivery_attempts, provider_events, activation_tests, expanded ai_tasks and audit_events | Unique event/request keys. Signed callbacks verified. Provider status and application commit kept distinct. |
 | Subscription and event modules | plans, subscriptions, subscription_events, events, registrations | Deduplicated provider events and capacity transactions. Payment card fields absent. |
 
-FIGURE_DATA
 
 ### Existing data compatibility
 
@@ -97,7 +95,7 @@ Title cases link to the completed business transaction and an approved document 
 
 ## 7 Voice activation notifications and recovery
 
-Voice is a planned adapter that maps the called number to a business. It plays the administrator-approved greeting and disclosure and passes allowed intents to the same workflow services as chat. A programmable provider exposes incoming webhooks and call-progress callbacks [3]. Verify provider signatures and deduplicate callback event IDs before updating state.
+Voice is a planned adapter that maps the called number to a business. It plays the administrator-approved greeting and disclosure and passes allowed intents to the same workflow services as chat. A programmable provider exposes incoming webhooks and call-progress callbacks [L3]. Verify provider signatures and deduplicate callback event IDs before updating state.
 
 Activation tests record business_id, assigned number, started_at, deadline, expected greeting revision, provider call ID, matched callback state, playback evidence and administrator confirmation. A two-minute deadline is computed server-side. A late callback may be logged but cannot silently pass an expired test. No call-progress status alone proves the administrator heard the intended greeting.
 
@@ -151,13 +149,13 @@ The repository review at commit d73c2c4896967e3d913116567fa9b7504d350c31 confirm
 
 ## Technical references
 
-[1] Supabase password security. https://supabase.com/docs/guides/auth/password-security
+[L1] Supabase password security. https://supabase.com/docs/guides/auth/password-security
 
-[2] Supabase Auth MFA. https://supabase.com/docs/guides/auth/auth-mfa
+[L2] Supabase Auth MFA. https://supabase.com/docs/guides/auth/auth-mfa
 
-[3] Twilio Voice webhooks. https://www.twilio.com/docs/usage/webhooks/voice-webhooks
+[L3] Twilio Voice webhooks. https://www.twilio.com/docs/usage/webhooks/voice-webhooks
 
-[4] xAI authenticated model catalogue. https://docs.x.ai/developers/rest-api-reference/inference/models
+[L4] xAI authenticated model catalogue. https://docs.x.ai/developers/rest-api-reference/inference/models
 
 ## 12 Implemented fall release: authoritative code map
 
