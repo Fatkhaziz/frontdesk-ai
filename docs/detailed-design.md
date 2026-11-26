@@ -196,54 +196,6 @@ ai_tasks is the common task record. assistant_runs holds the newer owner-questio
 
 schema_migrations records migration filename and SHA-256, not AI activity. ai_budget.calls is an attempt counter, not dollars. ai_spend_budget and ai_spend_reservations add conservative future-request reservations based on the declared remaining allowance. Failed calls are not refunded automatically; this errs toward protecting credit. The model-price estimate is pinned to the configured non-reasoning model and the official standard rates checked November 26, 2026. No web-search, image, voice or server-side tool calls are used in this text route.
 
-### Authentication and storage boundary
-
-Supabase Auth manages accounts; auth.users.encrypted_password stores the salted password hash for password-based users. memberships stores the external user subject, business_id, owner/staff role and active state. It does not store passwords. React submits credentials directly to managed Auth; the password is cleared after sign-in. The browser keeps the session in memory with refresh while the tab is open; a full reload requires sign-in again. The server verifies the bearer via Supabase Auth and checks active membership before private reads/writes.
-
-The current app revokes application-table access from anon/authenticated API roles and scopes SQL in the backend. It does not yet configure RLS policies or demonstrate a dedicated least-privilege production database role. That remaining hardening must not be described as completed. Auth, PostgreSQL and xAI are remote services even when the browser URL is 127.0.0.1. The final app host will be remote; Supabase Storage, voice, scheduling, notifications and payment-provider integrations remain planned unless separately verified.
-
-### Spending and operating procedure
-
-The updated launch script selects preparation mode, applies the additive migration, builds the frontend and starts the local server using existing private configuration. It authorizes no purchase, no automatic top-up and no reset of ai_budget.calls. The attempt guard becomes 200, while the tighter dollar reservation ledger governs useful practice. Preparation ceilings are $1.00, preserving at least $3.50 of the owner-declared $4.97. Before class the owner can explicitly launch --presentation to release the remaining approved allowance; it does not create new credit or reset prior reservations.
-
-Requests have bounded input/output, provider timeouts, no automatic paid retries and a visible waiting state. Repeatedly restarting does not erase the ledger. Verify current provider credit separately, because another application or account user can spend outside this ledger. If model pricing or the configured model changes, stop and review the estimate before allowing paid inference.
-## 12 Implemented fall release: authoritative code map
-
-This section supersedes earlier baseline statements that the task is logged only after a request or that source provenance is entirely planned. The repository now uses direct Psycopg SQL and checked-in SQL migrations, not SQLAlchemy or Alembic. JSON structures are serialized into TEXT columns in the current schema. The broader design above remains the target for spring; new route groups there are not claims of implementation.
-
-| File | Actual responsibility |
-| --- | --- |
-| frontend/src/main.tsx | Owner navigation, login, in-memory Supabase client/session refresh, listing search/filter and common API requests |
-| frontend/src/ListingEditor.tsx | Vehicle facts, optional AI description, exact saved-revision review/publish, unpublish and delete |
-| frontend/src/KnowledgeSetup.tsx | Private suggested questions, owner answers, staff routes and approval/publication |
-| frontend/src/PublicShop.tsx | Inventory, preferences, selected vehicles, comparison, multi-turn AI chat, source expansion and manual transcript export |
-| frontend/src/SystemStatus.tsx | Connectivity, practice allowance and actual request evidence |
-| backend/main.py | FastAPI app, request IDs, Supabase identity verification, owner dependency, listings and diagnostics |
-| backend/business.py | Versioned three-domain business profiles and business-independent inquiries |
-| backend/shopping.py | Published catalog, typed preferences, deterministic eligibility/arithmetic, knowledge routes and shopping inquiries |
-| backend/showcase_ai.py | Actual server-side HTTPS xAI request, bounded parsing and separate provider/application outcomes |
-| backend/spending.py | Atomic conservative cost reservation plus historical attempt cap across all paid paths |
-| backend/business_qa.py | Earlier business-profile question route; evidence in ai_interaction_evidence |
-| backend/ai.py | Earlier listing-draft and intent routes; safe usage metadata in ai_tasks |
-| backend/ai_rejection.py | Allowlisted rejection stage/reason/field without arbitrary provider text |
-| backend/db.py, backend/config.py | PostgreSQL connection, test-only SQLite adapter and database TLS verification |
-| backend/migrate.py, backend/verify_integration.py | Ordered migrations, checksum checks and private before/after row preservation checks |
-| migrations/001–006 | Actual tables and additive upgrade contract; previous files remain unchanged |
-| scripts/launch-showcase.sh, backend/practice.py | Existing configured Mac launch, migration 006, protected preparation/presentation mode and preserved counters |
-| tests and .github/workflows/fall-release-1.yml | Isolated regression, PostgreSQL upgrade and rendered mocked-service browser checks |
-
-### Exact AI request path
-
-POST /api/shop/{business_id}/assist -> ShoppingQuestion validation -> published catalog and source_list -> run_ai -> reserve_attempt -> provider_call -> POST https://api.x.ai/v1/chat/completions -> JSON/claim/constraint validation -> current-publication recheck -> accepted response. The model is hosted by xAI. No model runs on the user's Mac. The API key is read by the backend from private process configuration and is not returned to React.
-
-The provider request contains model, system instructions, a JSON-encoded user payload, temperature 0.2, max_tokens 1800 and response_format json_object. JSON formatting alone does not prove the content is true. The application additionally checks cited IDs, source revisions, recommendation eligibility, explicit requirement changes and allowed numeric facts/calculations. These checks are bounded safeguards rather than a complete semantic proof of every sentence. General unsupported market valuations, financing approval and accident-history claims must be deferred to staff.
-
-### Persistent data and evidence
-
-ai_tasks is the common task record. assistant_runs holds the newer owner-question/shopping evidence and joins through task_id and business_id. ai_interaction_evidence holds the earlier profile-Q&A evidence. inquiries, business_inquiries and shopping_inquiries store explicitly submitted follow-up work; none of these inquiry tables proves that an AI call occurred. source_snapshot/source_ids retain published revision provenance, not unrestricted chat transcripts. Rejection details are stored in ai_tasks.result; old absent diagnostics remain absent.
-
-schema_migrations records migration filename and SHA-256, not AI activity. ai_budget.calls is an attempt counter, not dollars. ai_spend_budget and ai_spend_reservations add conservative future-request reservations based on the declared remaining allowance. Failed calls are not refunded automatically; this errs toward protecting credit. The model-price estimate is pinned to the configured non-reasoning model and the official standard rates checked November 26, 2026. No web-search, image, voice or server-side tool calls are used in this text route.
-
 ### Controlled live acceptance
 
 The explicit --verify-live launch option sends at most three fixed synthetic shopping questions, stops on the first rejection without retry and saves actual response bodies privately on the Mac Desktop. This opt-in diagnostic capture is separate from ordinary application logs and never uses real customer contacts. It does not verify browser password sign-in. It makes a failed grounded response inspectable without publishing raw customer conversation content.
