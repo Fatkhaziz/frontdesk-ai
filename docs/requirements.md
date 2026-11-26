@@ -1,8 +1,7 @@
 # FrontDesk AI Requirements Use Cases and Constraints
 
-> November 24 scope update: the current dealership AI showcase, setup, acceptance criteria and evidence map are in [showcase-release.md](showcase-release.md). This document retains earlier baseline or full-system design details; three live business examples are no longer required for the fall showcase.
 
-CIS 457 Senior Design 1 | Team submission | Revised November 19, 2026
+CIS 457 Senior Design 1 | Team submission | Revised November 26, 2026
 
 Fatkhaziz Mukhamedov, Al Baraa Khaled, Mohammad Abdullah, Amar Al Balkhi
 
@@ -16,7 +15,7 @@ The final system supports a dealership, a salon and a photography studio through
 
 | Milestone | Required evidence |
 | --- | --- |
-| Fall 2026 progress milestone | Approximately 20 percent of the overall project, as required by the course. Demonstrate the existing vehicle intake, AI draft, owner review, publication, approved-fact questions and staff inbox. Add a small shared-configuration demonstration across a dealership and a salon, with different intake questions and permissions. Measure completed work against acceptance tests. |
+| Fall 2026 progress milestone | Approximately 20 percent of the overall project, as required by the course. Demonstrate the existing vehicle intake, AI draft, owner review, publication, approved-fact questions and staff inbox. Demonstrate owner AI question preparation, personalized customer requirements, and explained comparison within the dealership. The existing three-domain configuration fixtures are supporting design evidence, not a requirement to complete three live fall businesses. Measure completed work against acceptance tests. |
 | Spring 2027 final system | Complete the shared platform, four roles, three domain workflows, appointment management, phone reception, reminders and the dealership functions in Section 6. Demonstrate subscription management in a payment-provider sandbox. |
 
 The November dealership demo is evidence for a subset of the fall workflow. Dates in this specification identify targets and source records. Acceptance targets describe tests to perform and do not claim completed implementation or passed tests. The remaining final-system work stays on the project roadmap.
@@ -261,7 +260,7 @@ Sale, lease and title management cover intake, approved information, staff workf
 | NFR-01 Tenant and role isolation | All private actions enforce business, role and department. Secrets and passwords stay out of application records, prompts and browser bundles. | At least 40 prepared cross-business, cross-role and anonymous read/write attempts across three domain fixtures must all be denied. Inspect build and logs. |
 | NFR-02 Authentication | Verified privileged identities use MFA, expire after 30 minutes idle, and are throttled for 15 minutes after five failed attempts per account and source window. | Correct password without the second factor fails privileged access. Test revocation, idle expiry and throttling with controlled identities. |
 | NFR-03 Approved-fact behavior | At least 90 percent correct request classification and 90 percent correct answers on supported inputs. No unsupported factual value is displayed. | Freeze a set of 60 classified requests, 30 approved questions and 20 unknown/hostile questions before testing. Two reviewers independently score outputs. |
-| NFR-04 Web response | Ordinary API p95 below 1 second at 10 concurrent users. Show AI waiting state within 1 second and apply a 30-second provider timeout. | Measure 200 ordinary requests and 30 AI requests on the recorded deployment. Report provider latency separately. |
+| NFR-04 Web response | Ordinary API p95 below 1 second at 10 concurrent users. Show AI waiting state within 1 second and apply a 35-second shopping-provider timeout. | Measure 200 ordinary requests and 30 AI requests on the recorded deployment. Report provider latency separately. |
 | NFR-05 Voice response and capacity | Target three simultaneous calls per enabled business, answer within 3 seconds and reply audio within 2 seconds of end-of-turn for 95 percent of turns. | Test 50 calls with at least 300 turns and ten three-call concurrency rounds. Record end-of-turn and first-audio timestamps. Performance remains to be measured. |
 | NFR-06 Transaction reliability | Retries never duplicate a booking, inquiry, sale, lease or registration. Capacity and vehicle state remain consistent. | Ten concurrent final-resource requests, repeated request keys and injected failures at each commit boundary produce the expected single outcome. |
 | NFR-07 Privacy and retention | Transcripts and question content expire after 30 days. Inquiry contact data expires 90 days after closure. Redacted task metadata and audit events expire after 90 days. | Backdate fixtures and run purge jobs. Retained counts contain no content. Record provider/backups retention separately and verify the chosen backup policy before deployment. |
@@ -405,3 +404,60 @@ The October web specification's FR-ACC family maps to FR-01, FR-02 and FR-12. FR
 Professors' annotated AI_Receptionist_Requirements_Notes.pdf, 22 pages, supplied through Blackboard and reviewed November 19, 2026.
 
 FrontDesk AI Requirements Use Cases and Constraints, October 22, 2026. FrontDesk AI Detailed System Design, revised October 28, 2026. The current feasibility-demo repository and presentation handoff at commit d73c2c4896967e3d913116567fa9b7504d350c31 were inspected for implementation status.
+## 11 Fall AI additions and release boundaries
+
+These additions retain FR-01 through FR-24 and the full multi-business final scope. Faculty feedback dated November 2026 remains binding on the final system. The November 24 discussion with Dr. Matovu prioritizes a dealership and a concrete AI feature for the fall showcase. A working vertical slice is the course's 20 percent milestone; test counts are not a calculation of overall project completion.
+
+### FR-25 Prepare owner knowledge using AI
+
+The system shall let a business administrator explicitly request likely customer questions and information gaps from published business and inventory context. Suggestions remain private and unapproved. The owner supplies a supported answer, routes the question to staff, or ignores it. Saving and exact-revision publication are separate actions. The model cannot publish or create an approved answer.
+
+AT-25. Generate suggestions from published context, verify unpublished draft text is absent from the outgoing payload, save questions privately, add a verified answer, approve the saved revision and publish. The answer then becomes public; unanswered, draft and ignored cards do not.
+
+### FR-26 Hold a personalized shopping conversation
+
+The system shall interpret explicit customer needs into editable vehicle-price/total budget, minimum seats, mileage ceiling, requested specifications, required features and soft priorities. It shall preserve requirements across accepted turns unless the customer changes them, ask one relevant follow-up, explain selected-vehicle trade-offs and recommend only published available vehicles meeting all known hard constraints. Missing required facts cannot qualify as a verified match. The system shall show the source records used and offer a consented staff inquiry without silently submitting one.
+
+AT-26. Send a vehicle-price budget of $25,000 and a five-seat requirement, then explicitly raise the budget to $30,000. Verify preferences and selected IDs in both HTTP requests, cited published revisions and deterministic eligibility. Ask whether a price is fair; the answer must distinguish known asking prices from unknown external market/condition evidence. Unsupported values, foreign source IDs and a changed publication during the request fail safely. Validate using real xAI separately from mocked regressions.
+
+### UC-19 Prepare and publish AI-assisted owner knowledge
+
+Actor: business administrator. Trigger: the owner wants to prepare for customer questions. Preconditions: verified owner membership; business identified; published context available; spending allowance sufficient for an explicitly requested AI action.
+
+1. The owner requests suggestions once. The backend reserves an attempt and conservative cost, stores task intent, and sends published context to xAI. It does not send unapproved question drafts.
+2. The system validates question shape, length and duplicate rules, records provider and application outcomes, and displays private unsaved questions.
+3. The owner supplies true answers and a source note, marks staff-only questions or ignores irrelevant suggestions. Editing clears approval.
+4. The owner saves the private cards with expected_revision. The server rejects conflicting edits instead of overwriting another revision.
+5. The owner reviews the saved cards, confirms approval and publishes that exact revision. Only approved answered cards or deliberate staff routes are exposed publicly.
+6. Public answers use the published snapshot; later private edits leave it unchanged. The owner can unpublish knowledge.
+
+Success: the business has approved, traceable published knowledge and private information gaps. Minimal guarantee: failed inference or save cannot change public content. Exceptions: insufficient allowance sends no provider request; malformed output stays unaccepted; stale revision requires reload; staff role cannot approve; a failed provider response is recorded without automatic retry.
+
+### UC-20 Personalize and compare published options with AI
+
+Actor: customer. Trigger: the customer describes needs or asks a follow-up about selected vehicles. Preconditions: the selected business has published inventory; at most three selected IDs belong to it; AI is configured and the shared allowance permits the call.
+
+1. The customer enters a natural request or sets the visible requirements. The browser sends the message, accepted conversation history, typed preferences and selected IDs to the business-scoped endpoint.
+2. The backend validates the input, resolves only published records, assembles revision-specific sources and reserves usage in one transaction before contacting xAI.
+3. xAI returns structured preferences, an explanation, one follow-up, recommended listing IDs and cited source IDs. It has no database-write or booking authority.
+4. The backend validates shape, source membership, explicit changes to requirements, hard constraints, permitted numeric claims and supported arithmetic. Inline citations and list positions are separated from factual quantities. A new read checks that the published snapshot is still current.
+5. Accepted preferences become visible and editable. The customer sees the explanation, sources and suggested matches. A factual comparison table remains available independently of AI.
+6. The customer changes a requirement and sends another explicit turn. The system carries forward earlier accepted requirements and does not invent a successful turn after a rejected response.
+7. If staff help is wanted, the customer reviews the summary/selected vehicles, supplies contact separately, consents and submits one inquiry. The staff inbox stores the preferences and published snapshots.
+
+Success: an accepted, source-linked explanation helps the customer narrow options and records a verifiable provider request. Minimal guarantee: a rejected completion changes no facts, preferences or business records. Exceptions: expired/unpublished selections require refresh; stale publication returns conflict; missing total-cost fees prevent a certified total-budget match; unavailable inference offers facts and staff help; no retry occurs automatically. Postcondition: chatting alone creates no sales lead or inquiry.
+
+### Additional brief use cases
+
+| ID and name | Actor goal | Requirements | Delivery |
+| --- | --- | --- | --- |
+| UC-19 Prepare and publish AI-assisted owner knowledge | Owner finds questions, supplies answers and approves publication | FR-04, FR-25 | Fall |
+| UC-20 Personalize and compare published options with AI | Customer refines needs and receives cited option trade-offs | FR-05, FR-14, FR-26 | Fall live acceptance required |
+| UC-21 Manage subscription access | Business administrator uses hosted sandbox checkout; verified events control enabled modules | FR-12 | Spring |
+| UC-22 Manage privacy and retention | Authorized administrator exports or removes permitted customer content under the retention policy | NFR-07 | Spring |
+
+### Clarified measurable targets
+
+The actual shopping provider timeout is 35 seconds; legacy calls use 30 seconds. NFR-04 is revised to a 35-second provider timeout for shopping, plus a visible waiting state within one second and no automatic paid retry. The p95 latency targets require a recorded deployment benchmark and are not results of unit tests. NFR-02 MFA, department roles and explicit idle throttling remain final-system acceptance targets, not current controls. NFR-07 deletion schedules remain planned; metadata minimization is implemented but is not a purge job.
+
+For the fall AI slice add NFR-11: zero provider requests occur on navigation, comparison, status refresh or a rejected budget reservation; prove this with mocked transport counts. Add NFR-12: preparation reservations must not exceed $1.00 from the owner-declared $4.97 remaining allowance and must preserve at least $3.50 while preparation mode is active. Failed attempts remain reserved, the historical counter is never reset, and an unpriced model is blocked until the estimate is reviewed. These figures are application ceilings, not a reading of the current xAI balance.

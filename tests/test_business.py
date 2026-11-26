@@ -33,7 +33,7 @@ class BusinessReception(unittest.TestCase):
         self.env.start()
         with connect() as c:
             c.executescript(Path('migrations/001_demo.sql').read_text().split('-- Application data')[0] + 'COMMIT;')
-            for filename in ['002_listing_ai_tasks.sql', '003_business_reception.sql', '004_ai_interaction_evidence.sql', '005_shopping_assistant.sql']:
+            for filename in ['002_listing_ai_tasks.sql', '003_business_reception.sql', '004_ai_interaction_evidence.sql', '005_shopping_assistant.sql', '006_ai_practice_budget.sql']:
                 c.executescript(Path('migrations', filename).read_text().split('REVOKE')[0] + 'COMMIT;')
             for business in ['a', 'b']:
                 execute(c, 'INSERT INTO businesses VALUES(%s,%s)', (business, business))

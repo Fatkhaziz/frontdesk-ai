@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -31,6 +31,8 @@ function App() {
     [car, setCar] = useState<Car | null>(null),
     [inbox, setInbox] = useState<any[]>([]);
   const [editorStage, setEditorStage] = useState(1);
+  const [listingSearch, setListingSearch] = useState("");
+  const [listingFilter, setListingFilter] = useState("all");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [tab, setTab] = useState("Listings"),
     [editorKey, setEditorKey] = useState(0);
@@ -43,6 +45,15 @@ function App() {
   const businessId = location.pathname.startsWith("/business/")
     ? location.pathname.split("/")[2]
     : null;
+  const authClient = useMemo(() => config?.supabaseUrl && config?.supabaseKey && !lid && !shopId && !businessId
+    ? createClient(config.supabaseUrl, config.supabaseKey, { auth: {
+      persistSession: false, autoRefreshToken: true, detectSessionInUrl: false,
+    }}) : null, [config?.supabaseUrl, config?.supabaseKey]);
+  useEffect(() => {
+    if (!authClient) return;
+    const { data } = authClient.auth.onAuthStateChange((_event, session) => setToken(session?.access_token || ""));
+    return () => { data.subscription.unsubscribe(); authClient.auth.stopAutoRefresh(); };
+  }, [authClient]);
   async function api(path: string, method = "GET", body?: unknown) {
     const r = await fetch("/api" + path, {
       method,
@@ -120,7 +131,7 @@ function App() {
             null,
         );
       });
-  }, [token]);
+  }, [!!token]);
   const salon = workspace?.profile && workspace.profile.domain !== "dealership";
   const tabs = [
     "Business settings",
@@ -132,7 +143,7 @@ function App() {
   ];
   const visibleTab = tabs.includes(tab) ? tab : "Business settings";
   return (
-    <main>
+    <main className={token && !shopId && !businessId && !lid ? "owner-app" : "public-app"}>
       <header>
         <a className="brand" href="/">
           FrontDesk <strong>AI</strong>
@@ -181,18 +192,8 @@ function App() {
                 run(async () => {
                   if (!config)
                     throw Error("Please wait for the service to connect.");
-                  const client = createClient(
-                    config.supabaseUrl,
-                    config.supabaseKey,
-                    {
-                      auth: {
-                        persistSession: false,
-                        autoRefreshToken: false,
-                        detectSessionInUrl: false,
-                      },
-                    },
-                  );
-                  const { data, error } = await client.auth.signInWithPassword({
+                  if (!authClient) throw Error("Sign-in configuration is unavailable.");
+                  const { data, error } = await authClient.auth.signInWithPassword({
                     email,
                     password,
                   });
@@ -245,6 +246,7 @@ function App() {
             <button
               disabled={busy}
               onClick={() => {
+                authClient?.auth.signOut();
                 setToken("");
                 setTab("Business settings");
                 setWorkspace(null);
@@ -351,12 +353,16 @@ function App() {
               </div>
               <div className="workspace">
                 <aside className="listing-list" aria-label="Saved vehicles">
+                  <div className="listing-tools">
+                    <label>Find a vehicle<input type="search" placeholder="Make, model or year" value={listingSearch} onChange={e => setListingSearch(e.target.value)} /></label>
+                    <label>Show<select value={listingFilter} onChange={e => setListingFilter(e.target.value)}><option value="all">All listings ({cars.length})</option><option value="published">Published</option><option value="draft">Private drafts</option></select></label>
+                  </div>
                   {cars.length === 0 && (
                     <p className="empty">
                       No vehicles yet. Create your first listing.
                     </p>
                   )}
-                  {cars.map((c) => {
+                  {cars.filter(c => vehicleName(c.facts).toLowerCase().includes(listingSearch.toLowerCase()) && (listingFilter === "all" || (listingFilter === "published" ? c.published_revision !== null : c.published_revision === null))).map((c) => {
                     const matches = cars.filter(
                       (v) => vehicleName(v.facts) === vehicleName(c.facts),
                     );

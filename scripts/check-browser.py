@@ -23,11 +23,8 @@ logging.disable(logging.CRITICAL)
 with tempfile.TemporaryDirectory() as tmp:
     os.environ['DATABASE_URL']='sqlite:///'+tmp+'/browser.sqlite'
     with connect() as c:
-        c.executescript(Path('migrations/001_demo.sql').read_text().split('-- Application data')[0]+'COMMIT;')
-        c.executescript(Path('migrations/002_listing_ai_tasks.sql').read_text().split('REVOKE')[0]+'COMMIT;')
-        c.executescript(Path('migrations/003_business_reception.sql').read_text().split('REVOKE')[0]+'COMMIT;')
-        c.executescript(Path('migrations/004_ai_interaction_evidence.sql').read_text().split('REVOKE')[0]+'COMMIT;')
-        c.executescript(Path('migrations/005_shopping_assistant.sql').read_text().split('REVOKE')[0]+'COMMIT;')
+        for migration in sorted(Path('migrations').glob('*.sql')):
+            c.executescript(migration.read_text().split('-- Application data')[0].split('REVOKE')[0]+'COMMIT;')
         execute(c,'INSERT INTO businesses VALUES(%s,%s)',('browser','Demo Motors'))
     def test_identity(request: Request):
         if not request.headers.get('authorization','').startswith('Bearer '):

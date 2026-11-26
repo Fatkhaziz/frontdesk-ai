@@ -16,6 +16,7 @@ from .ai import now
 from .config import question_mode
 from .db import connect, execute
 from .ai_rejection import Rejection
+from .spending import reserve_attempt
 
 
 def provider_call(instruction, payload):
@@ -43,10 +44,7 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
         raise HTTPException(422, 'Too much context. Shorten the message or reduce the selected inventory.')
     task = str(uuid.uuid4())
     with connect() as c:
-        reserved = execute(c, 'UPDATE ai_budget SET calls=calls+1 WHERE id=1 AND calls<%s RETURNING calls',
-                           (int(os.getenv('AI_CALL_LIMIT', '10')),)).fetchone()
-        if not reserved:
-            raise HTTPException(429, 'The configured AI attempt limit has been reached. Ask the owner to review usage; no request was sent.')
+        reserve_attempt(c, task, business, operation, instruction, payload)
         execute(c, 'INSERT INTO ai_tasks VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 (task, business, operation, model, 'started', None, None, None, now()))
         execute(c, 'INSERT INTO assistant_runs(task_id,business_id,request_id,operation,source_snapshot,provider_outcome,application_outcome) VALUES(%s,%s,%s,%s,%s,%s,%s)',
