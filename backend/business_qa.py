@@ -114,17 +114,22 @@ def answer_question(business_id, profile, question, request_id, read_current):
     task_id = str(uuid.uuid4())
     started = time.monotonic()
     # Persist intent BEFORE any network call, and reserve from the existing cap.
-    with connect() as c:
-        reserved = execute(c, 'UPDATE ai_budget SET calls=calls+1 WHERE id=1 AND calls<%s RETURNING calls', (int(os.getenv('AI_CALL_LIMIT', '10')),)).fetchone()
-        if not reserved:
+    from .spending import reserve_attempt
+    from fastapi import HTTPException
+    payload = {'business_id': business_id, 'revision': revision, 'question': question, 'sources': sources}
+    try:
+        with connect() as c:
+            reserve_attempt(c, task_id, business_id, 'business_question', INSTRUCTION, payload, MAX_OUTPUT_TOKENS)
+            execute(c, 'INSERT INTO ai_tasks VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)', (task_id, business_id, 'business_question', model, 'started', None, None, None, now()))
+            execute(c, 'INSERT INTO ai_interaction_evidence(task_id,request_id,business_id,published_revision,approved_sources,provider_outcome,application_outcome) VALUES(%s,%s,%s,%s,%s,%s,%s)',
+                    (task_id, request_id, business_id, revision, json.dumps(sources), 'started', 'pending'))
+    except HTTPException as exc:
+        if exc.status_code == 429:
             return {**fallback, 'mode': 'error', 'reason': 'attempt_budget_exhausted'}
-        execute(c, 'INSERT INTO ai_tasks VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)', (task_id, business_id, 'business_question', model, 'started', None, None, None, now()))
-        execute(c, 'INSERT INTO ai_interaction_evidence(task_id,request_id,business_id,published_revision,approved_sources,provider_outcome,application_outcome) VALUES(%s,%s,%s,%s,%s,%s,%s)',
-                (task_id, request_id, business_id, revision, json.dumps(sources), 'started', 'pending'))
+        raise
     provider_outcome, application_outcome = 'failed', 'provider_error'
     provider_id, usage, refs = None, None, []
     try:
-        payload = {'business_id': business_id, 'revision': revision, 'question': question, 'sources': sources}
         with httpx.Client(timeout=30, trust_env=True) as client:
             response = client.post('https://api.x.ai/v1/chat/completions', headers={'Authorization': f'Bearer {key}'},
                                    json={'model': model, 'messages': [{'role': 'system', 'content': INSTRUCTION}, {'role': 'user', 'content': json.dumps(payload)}],

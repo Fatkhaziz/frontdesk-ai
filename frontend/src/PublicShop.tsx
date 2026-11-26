@@ -112,6 +112,13 @@ export default function PublicShop({
     requestKey = useRef(crypto.randomUUID()),
     chatEnd = useRef<HTMLDivElement>(null);
   const ai = config.questionMode === "ai" && !!config.shoppingAiEnabled;
+  function exportConversation() {
+    const content = { exported_at: new Date().toISOString(), business_id: id, preferences, selected_ids: selected,
+      note: "Actual accepted responses from this browser tab. Not a new AI request.", messages };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], {type: "application/json"}));
+    const link = document.createElement("a"); link.href = url; link.download = "frontdesk-conversation.json"; link.click();
+    URL.revokeObjectURL(url);
+  }
   useEffect(() => {
     api("/shop/" + id)
       .then(setData)
@@ -272,7 +279,7 @@ export default function PublicShop({
       <div className="shop-hero">
         <div>
           <p className="eyebrow">{data.name} · FrontDesk AI</p>
-          <h1>A clearer way to find your next car.</h1>
+          <h1>Find the car that fits your life.</h1>
           <p className="lead">
             Tell us what matters. Compare approved facts. Understand the
             trade-offs.
@@ -304,6 +311,7 @@ export default function PublicShop({
           </button>
         ))}
       </nav>
+      {selected.length > 0 && <div className="selection-tray" aria-label="Selected vehicles"><span><strong>{selected.length} of 3 selected</strong> · {data.listings.filter(l => selected.includes(l.id)).map(l => l.facts.model).join(" + ")}</span><div className="actions"><button disabled={busy || selected.length < 2} onClick={compare}>Compare selected</button><button className="primary" onClick={() => setTab("Find my fit")}>Ask about my selection</button><button onClick={() => { setSelected([]); setComparison(null); }}>Clear selection</button></div></div>}
       {data.listings.some((l) => l.facts.synthetic) && (
         <p className="notice">
           Vehicles marked “Fictional example” use illustrative specifications
@@ -734,6 +742,7 @@ export default function PublicShop({
                   {ai ? "Live AI enabled" : "AI disabled"}
                 </span>
               </div>
+              {messages.length > 0 && <div className="actions chat-tools"><button onClick={exportConversation}>Save conversation</button><button disabled={busy} onClick={() => { setMessages([]); setRecommended([]); setMatches(null); setQuestion(""); }}>New conversation</button><small>Saved files contain the messages you entered. Refreshing this page clears the chat.</small></div>}
               <p>
                 Describe your budget, driving routine or priorities. The
                 assistant can ask a follow-up, suggest options and explain its

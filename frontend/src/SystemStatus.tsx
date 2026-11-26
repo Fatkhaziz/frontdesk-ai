@@ -84,6 +84,7 @@ export default function SystemStatus({ api }: { api: Api }) {
                 </article>
               ))}
             </div>
+            {status.spending?.configured && <div className="budget-panel"><div><p className="eyebrow">Protected presentation allowance</p><h2>Practice with a spending ceiling</h2><p>Preparation ceiling: ${status.spending.preparation_limit_usd.toFixed(2)}. At least ${status.spending.presentation_reserve_usd.toFixed(2)} stays reserved while preparation mode is active.</p></div><dl className="specs"><div><dt>Preparation remaining (conservative)</dt><dd>${status.spending.preparation_remaining_usd.toFixed(2)}</dd></div><div><dt>Mode</dt><dd>{status.spending.mode}</dd></div><div><dt>Maximum reserved for requests</dt><dd>${status.spending.conservative_reserved_usd.toFixed(3)}</dd></div></dl><small>{status.spending.balance_source} Refreshing status costs no AI credits.</small></div>}
             <div className="saved-summary">
               <h2>Last successful vehicle provider request</h2>
               {last ? (

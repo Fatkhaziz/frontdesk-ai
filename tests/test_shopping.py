@@ -57,6 +57,17 @@ class Shopping(unittest.TestCase):
         with patch('backend.showcase_ai.provider_call',return_value=self.envelope(result or self.result())):
             return self.client.post('/api/shop/a/assist',json={'message':'Help me choose a car',**body})
 
+    def test_natural_seat_words_and_list_markers_are_not_false_claims(self):
+        sources=source_list(catalog('a'))
+        refs=[s['id'] for s in sources if s['listing_id']==self.ids[0] and s['id'].endswith((':price',':seats'))]
+        prefs={**Preferences().model_dump(),'min_seats':5}
+        result=self.result(preferences=prefs,source_ids=refs,answer='1. The listed price is $23,500. [1]\n2. It has five seats. [2]')
+        r=self.ask(result,message='I need five seats for commuting')
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()['preferences']['min_seats'],5)
+        bad={**result,'answer':'1. It has seven seats.'}
+        self.assertEqual(self.ask(bad,message='I need five seats').status_code,503)
+
     def test_comparison_uses_public_facts_and_exact_cent_arithmetic(self):
         self.client.patch('/api/listings/'+self.ids[0],json={'facts':{**self.facts,'price':9990000},'description':'PRIVATE-CANARY','expected_revision':1})
         r=self.client.post('/api/shop/a/compare',json={'listing_ids':self.ids,'preferences':{'budget_cents':2500000,'budget_kind':'vehicle'}})
@@ -171,6 +182,32 @@ class Shopping(unittest.TestCase):
         r=self.ask(self.result(answer='This vehicle costs $45.',source_ids=refs))
         self.assertEqual(r.status_code,503)
         self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['reason'],'unsupported_number')
+
+    def test_valid_specification_difference_is_not_an_invented_number(self):
+        from backend.shopping import validate_answer, ShoppingQuestion
+        data=catalog('a')
+        next(l for l in data['listings'] if l['id']==self.ids[1])['facts']['mpg_combined']=32
+        sources=source_list(data)
+        refs=[s['id'] for s in sources if s['id'].endswith(':mpg_combined')]
+        result=self.result(answer='Published combined MPG values are 45 and 32, a difference of 13 MPG. This is not a total ownership-cost estimate.',source_ids=refs)
+        body=ShoppingQuestion(message='Compare published fuel economy',selected_ids=self.ids)
+        validate_answer(result,data,body,sources)
+        derived=next(s for s in sources if s['id'].endswith(':mpg_combined_difference'))
+        self.assertEqual(set(derived['inputs']),set(refs))
+        with self.assertRaises(ValueError):
+            validate_answer({**result,'answer':'The difference is 14 MPG.'},data,body,sources)
+        with self.assertRaises(ValueError):
+            validate_answer({**result,'answer':'The price difference is $13.'},data,body,sources)
+
+    def test_inline_citation_digits_are_not_factual_claims(self):
+        result=self.result()
+        identity=result['source_ids'][0]
+        for citation in [f'[{identity}]','[1]']:
+            r=self.ask({**result,'answer':f'The listed price is $23,500 {citation}.'})
+            self.assertEqual(r.status_code,200,r.text)
+        for citation in ['[listing:foreign:r1:price]','[99]']:
+            self.assertEqual(self.ask({**result,'answer':f'The listed price is $23,500 {citation}.'}).status_code,503)
+            self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['reason'],'unapproved_source')
 
     def test_budget_followup_preserves_seats_priority_and_selection(self):
         old={**Preferences().model_dump(),'budget_cents':2500000,'budget_kind':'vehicle','min_seats':5,'priorities':['fuel_economy']}
