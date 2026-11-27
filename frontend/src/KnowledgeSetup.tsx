@@ -58,7 +58,7 @@ export default function KnowledgeSetup({
         </div>
         <div className="actions">
           <a className="button" href={"/shop/" + businessId + "?view=questions"} target="_blank" rel="noreferrer">
-            See published answers ↗
+            See published answers
           </a>
         </div>
       </div>
