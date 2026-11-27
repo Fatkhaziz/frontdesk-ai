@@ -128,7 +128,7 @@ def main():
             shop.screenshot(path='/tmp/frontdesk-shopping-comparison.png',full_page=True)
             compare_count=len(comparison_requests)
             shop.get_by_role('button',name='Explain this comparison with AI',exact=True).click()
-            expect(shop.locator('.bubble.assistant strong')).to_have_count(3)
+            expect(shop.locator('.bubble.assistant > strong')).to_have_count(3)
             assert len(comparison_requests)==compare_count, 'Chat waited for an unnecessary comparison request'
             shop.get_by_role('button',name='Ask staff to follow up',exact=True).click()
             shop.get_by_label('Your question or summary').fill('Please confirm warranty and accident history for these vehicles.')
