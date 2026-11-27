@@ -30,11 +30,22 @@ class LiveAcceptance(unittest.TestCase):
     def test_rejection_keeps_raw_synthetic_response_and_stops_without_retry(self):
         target=Path(self.tmp.name)/'evidence'
         prefs={**self.result()['preferences'],'budget_cents':2500000,'budget_kind':'vehicle','min_seats':5}
-        bad=self.envelope(self.result(preferences=prefs,answer='Invented price $99,999.'))
+        bad=self.envelope(self.result(preferences=prefs,source_ids=['foreign:price']))
         with patch('backend.showcase_ai.provider_call',return_value=bad) as provider:
             self.assertFalse(verify('a',target))
         self.assertEqual(provider.call_count,1)
         record=json.loads((target/'actual-results.json').read_text())
         self.assertFalse(record['accepted'])
-        self.assertEqual(record['turns'][0]['safe_rejection']['rejection']['reason'],'unsupported_number')
+        self.assertEqual(record['turns'][0]['safe_rejection']['rejection']['reason'],'unapproved_source')
         self.assertEqual(record['turns'][0]['provider_response'],bad)
+
+    def test_limited_summary_is_not_reported_as_full_live_success_or_retried(self):
+        target=Path(self.tmp.name)/'evidence'
+        prefs={**self.result()['preferences'],'budget_cents':2500000,'budget_kind':'vehicle','min_seats':5}
+        with patch('backend.showcase_ai.provider_call',return_value=self.envelope(self.result(preferences=prefs,answer='Invented price $99,999.'))) as provider:
+            self.assertFalse(verify('a',target))
+        provider.assert_called_once()
+        record=json.loads((target/'actual-results.json').read_text())
+        self.assertFalse(record['accepted'])
+        self.assertTrue(record['turns'][0]['delivered_with_limits'])
+        self.assertEqual(record['turns'][0]['application_response']['answer_mode'],'grounded_summary')

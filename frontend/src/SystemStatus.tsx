@@ -151,7 +151,9 @@ export default function SystemStatus({ api }: { api: Api }) {
               <p className="muted">
                 Actual saved request records. Provider success means xAI
                 returned a completion; application acceptance means our checks
-                passed. These are separate outcomes.
+                passed. Accepted with limits means the AI wording was omitted
+                and a server summary of published facts was delivered. These
+                are separate outcomes.
               </p>
               {!runs.length ? (
                 <p>
@@ -198,7 +200,7 @@ export default function SystemStatus({ api }: { api: Api }) {
                     {r.application_outcome !== "accepted" && (
                       <p className="notice">
                         {r.rejection
-                          ? `Rejected at ${r.rejection.stage}: ${r.rejection.reason}${r.rejection.field ? ` · field ${r.rejection.field}` : ""}${r.rejection.source_id ? ` · source ${r.rejection.source_id}` : ""}`
+                          ? `${r.application_outcome === "accepted_with_limits" ? "AI wording omitted at" : "Rejected at"} ${r.rejection.stage}: ${r.rejection.reason}${r.rejection.field ? ` · field ${r.rejection.field}` : ""}${r.rejection.source_id ? ` · source ${r.rejection.source_id}` : ""}`
                           : "Specific rejection diagnostics were not recorded for this request."}
                       </p>
                     )}

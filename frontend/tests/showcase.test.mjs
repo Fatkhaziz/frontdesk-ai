@@ -52,6 +52,20 @@ test('multi-turn AI preferences persist and send is explicit',async()=>{
  const sends=calls.filter(c=>c.path.endsWith('/assist'));assert.equal(sends.length,2);assert.equal(sends[1].body.preferences.budget_cents,2500000);assert.equal(sends[1].body.history.length,2);
 });
 
+test('limited numeric delivery is visibly labeled and retains checked preferences',async()=>{
+ const calls=[];const api=async(path,method,body)=>{calls.push({path,method,body});if(!method)return inventory;return {preferences:{...prefs,budget_cents:2500000,budget_kind:'vehicle'},answer:'Published price: $23,500.00 USD.',follow_up:'Which features are required?',recommended_ids:[],matches:['a'],sources:[],answer_mode:'grounded_summary',mode:'live_ai'};};
+ await act(async()=>root.render(h(PublicShop,{key:'limited-chat',id:'a',api,config})));
+ await click(button('Find my fit'));await fill(field('Your message'),'My vehicle budget is $25,000.');await submit(field('Your message').closest('form'));
+ assert.match(document.querySelector('[role="status"]').textContent,/Showing confirmed listing details instead/);
+ assert.match(document.querySelector('[role="log"]').textContent,/Confirmed listing summary/);
+ assert.match(document.querySelector('[role="log"]').textContent,/not the original AI explanation/);
+ assert.equal(field('Maximum budget (USD)').value,'25000');
+ assert.equal(calls.filter(c=>c.path.endsWith('/assist')).length,1);
+ await act(async()=>root.render(h(SystemStatus,{key:'limited-evidence',api:async(path)=>path==='/diagnostics'?{auth:'ready',database:'connected'}:[{task_id:'limited',operation:'shopping_assistant',application_outcome:'accepted_with_limits',provider_outcome:'succeeded',source_ids:['listing:a:r1:price'],rejection:{stage:'claims',reason:'unsupported_number',field:'answer'}}]})));
+ assert.match(document.body.textContent,/AI wording omitted at claims: unsupported_number · field answer/);
+ assert.doesNotMatch(document.body.textContent,/Rejected at claims/);
+});
+
 test('owner AI suggestions stay unsaved and cannot publish without approval',async()=>{
  const calls=[];const api=async(path,method,body)=>{calls.push({path,method,body});if(path.endsWith('/suggest'))return {questions:[{question:'What warranty applies?',reason:'No warranty was supplied.'}]};return {revision:0,published_revision:null,cards:[]};};
  const run=async(fn)=>fn();

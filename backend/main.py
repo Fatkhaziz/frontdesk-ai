@@ -317,7 +317,7 @@ def diagnostics(m=Depends(owner)):
     limit=int(os.getenv('AI_CALL_LIMIT','10'))
     return {'auth':auth,'database':'isolated rehearsal' if rehearsal else 'connected','backend':'running','question_mode':question_mode(),'ai_enabled':ai_enabled(),
             'drafting': 'last request failed' if draft_task and draft_task['status']=='failed' else ('ready' if ai_enabled() and calls<limit else 'unavailable'),
-            'ai_calls_used':calls,'ai_call_limit':limit,'spending':spending,'showcase_validation_version':5,'last_successful_ai_request':dict(success) if success else None,
+            'ai_calls_used':calls,'ai_call_limit':limit,'spending':spending,'showcase_validation_version':6,'last_successful_ai_request':dict(success) if success else None,
             'last_actual_ai_request':dict(last) if last else None, 'last_business_qa_evidence':dict(evidence) if evidence else None}
 
 @app.get('/api/ai/evidence')
