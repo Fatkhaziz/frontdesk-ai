@@ -1,6 +1,6 @@
 # FrontDesk AI current showcase and acceptance guide
 
-Current as of November 26, 2026. Workspace 2 and validation version 6 delivery update: [update notes](workspace-2-update.md). This replaces historical capped-attempt handoffs.
+Current as of November 26, 2026. Workspace 2 and validation version 7 citation/delivery update: [update notes](workspace-2-update.md). This replaces historical capped-attempt handoffs.
 
 FrontDesk AI Practice, Showcase and Technical Evidence Guide
 
@@ -23,7 +23,7 @@ bash scripts/launch-showcase.sh
 
 The script loads the existing private configuration, checks Auth/database connectivity, applies pending migration 006, preserves existing records and usage, builds the website and starts the app. It makes no AI inference during launch. Keep this Terminal open. If it reports a migration/configuration error, stop there and retain the safe error category; do not paste credentials into chat or reset the database.
 
-Open Safari. Click the address bar once, type http://127.0.0.1:8000/ and press Return. Sign in privately with the existing owner email/password. Click System status and Refresh status. Check Auth ready, PostgreSQL connected, validation version 6 in Technical API diagnostics, and the practice-budget panel. The historical attempt count should remain at its real value; it must not reset to zero.
+Open Safari. First open http://127.0.0.1:8000/health and check `showcase_validation_version: 7`. This read-only check needs no login and sends no AI inference. Then open http://127.0.0.1:8000/ and sign in privately with the existing owner email/password. Click System status and Refresh status. Check Auth ready, PostgreSQL connected, validation version 7 in Technical API diagnostics, and the practice-budget panel. The historical attempt count should remain at its real value; it must not reset to zero.
 
 The attempt guard is now 200; it is not 200 free calls. A shared conservative ledger caps preparation at $1.00 of the owner-declared $4.97 allowance and preserves at least $3.50 while preparation mode is active. Failed attempts remain reserved. The provider’s actual remaining credit must be checked separately at https://console.x.ai/. No top-up, purchase or automatic retry is enabled by this launcher.
 
@@ -35,7 +35,7 @@ Use the visible business-specific link rather than guessing an ID. The previousl
 
 ## 3 Perform the real AI acceptance check before class
 
-Version 6 asks the model to insert approved values through short source references; the server supplies the exact listing quantities. Normal accepted output is labeled an AI explanation. If numeric wording cannot be verified but the structured needs, source scope and recommendations passed checks, ALL model prose is discarded and a confirmed listing summary is displayed. Its evidence is `accepted_with_limits`, retaining the original safe rejection category and canonical source IDs. This is useful limited delivery, not proof that the model explanation passed. Invalid preferences, foreign references, stale publications and provider failures remain blocked. No second paid request is made automatically.
+Version 7 asks the model to insert approved values through short source references; the server supplies the exact listing quantities. Known inline/grouped/policy citations resolve against the published snapshot. Normal accepted output is labeled an AI explanation. If numeric wording or inline citations cannot be verified but the structured needs, declared sources and recommendations passed checks, ALL model prose is discarded and a confirmed listing summary is displayed. Its evidence is `accepted_with_limits`, retaining the original safe rejection category and canonical source IDs. This is useful limited delivery, not proof that the model explanation passed. Invalid preferences, foreign declared references, stale publications and provider failures remain blocked. No second paid request is made automatically.
 
 Optional automated real check: launch with bash scripts/launch-showcase.sh --practice --verify-live. This sends up to three actual synthetic shopping requests (needs, budget change and fair-price), stops at the first rejection without retry, and saves accepted responses plus private raw diagnostics under Desktop/FrontDesk-AI-Live-Acceptance. It uses the same protected allowance. It does not test browser password sign-in. The default launch without --verify-live sends no inference. After this check, use the manual steps below to practice the interface and the owner question feature.
 

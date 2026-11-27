@@ -45,8 +45,10 @@ def main():
         matches=[l for l in inventory if eligible(l,prefs)]
         lid=matches[0]['id'] if matches else payload['inventory'][0]['id']
         source=next(s for s in payload['sources'] if s['listing_id']==lid and s['label'].endswith(' · price'))
-        answer=(f"The lower-priced option leaves more of your vehicle budget available. Its listed price is [[{source['id']}]]. Compare seating and mileage before deciding; total costs still need staff confirmation."
-                if 'numeric recovery' not in payload['message'] else 'UNVERIFIED-PROSE: This vehicle costs $99,999.')
+        policy=next((s for s in payload['sources'] if not s.get('value_text')),None)
+        policy_citation=f" [[{policy['id']}]]" if policy else ''
+        answer=(f"The lower-priced option leaves more of your vehicle budget available. Its listed price is [[{source['id']}]]. Compare seating and mileage before deciding; total costs still need staff confirmation.{policy_citation}"
+                if 'citation recovery' not in payload['message'] else 'UNVERIFIED-PROSE: This warranty is established [[S9999]].')
         return fixture.envelope({'preferences':prefs.model_dump(),'answer':answer,
             'follow_up':'Would you prioritize a lower purchase price or additional passenger space?',
             'recommended_ids':[l['id'] for l in matches[:2]],'source_ids':[s['id'] for s in payload['sources'] if any(l['id']==s['listing_id'] for l in matches[:2])][:25]})
@@ -114,7 +116,7 @@ def main():
             page.get_by_role('button',name='System status',exact=True).click()
             expect(page.get_by_role('heading',name='Latest showcase AI requests')).to_be_visible()
             expect(page.get_by_text('mock-completion-123',exact=True).first).to_be_visible()
-            shop.get_by_label('Your message').fill('Check numeric recovery for these selected vehicles.')
+            shop.get_by_label('Your message').fill('Check citation recovery for these selected vehicles.')
             shop.get_by_role('button',name='Send to AI',exact=True).click()
             expect(shop.get_by_role('status')).to_contain_text('Showing confirmed listing details instead')
             expect(shop.get_by_role('log')).to_contain_text('Confirmed listing summary')
@@ -122,14 +124,14 @@ def main():
             expect(shop.get_by_role('log')).not_to_contain_text('$99,999')
             page.get_by_role('button',name='Refresh status',exact=True).click()
             expect(page.get_by_text('accepted_with_limits',exact=True).first).to_be_visible()
-            expect(page.get_by_text('AI wording omitted at claims: unsupported_number · field answer',exact=True)).to_be_visible()
+            expect(page.get_by_text('AI wording omitted at sources: unapproved_source · field answer',exact=True)).to_be_visible()
             page.screenshot(path='/tmp/frontdesk-showcase-evidence.png',full_page=True)
             shop.set_viewport_size({'width':390,'height':844});shop.screenshot(path='/tmp/frontdesk-shopping-mobile.png',full_page=True)
             assert shop.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile page overflow'
             shop.get_by_role('button',name='Inventory',exact=True).click()
             assert shop.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile inventory overflow'
             assert not errors,errors
-            print('PASS: rendered owner questions/publication, inventory/comparison, source-rendered AI explanation, multi-turn preferences, limited summary omitting bad numeric prose, consented inquiry, correlated evidence and mobile layout. Auth and provider completions were mocked; no paid calls.')
+            print('PASS: rendered owner questions/publication, inventory/comparison, approved policy citations and source-rendered AI explanation, multi-turn preferences, limited summary omitting bad inline sources, consented inquiry, correlated evidence and mobile layout. Auth and provider completions were mocked; no paid calls.')
             browser.close()
     finally:
         server.should_exit=True;thread.join(timeout=5);fixture.tearDown()
