@@ -260,7 +260,7 @@ export default function PublicShop({
       setQuestion("");
       setNotice(
         r.answer_mode === "grounded_summary"
-          ? "Some AI wording could not be verified. Showing confirmed listing details instead. Your checked preferences are retained."
+          ? "Some AI wording or citations could not be verified. Showing confirmed listing details instead. Your checked preferences are retained."
           : "Answer received from live AI and checked against published source IDs. Review the facts and limitations below.",
       );
     }, true);

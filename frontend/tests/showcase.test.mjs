@@ -61,9 +61,9 @@ test('limited numeric delivery is visibly labeled and retains checked preference
  assert.match(document.querySelector('[role="log"]').textContent,/not the original AI explanation/);
  assert.equal(field('Maximum budget (USD)').value,'25000');
  assert.equal(calls.filter(c=>c.path.endsWith('/assist')).length,1);
- await act(async()=>root.render(h(SystemStatus,{key:'limited-evidence',api:async(path)=>path==='/diagnostics'?{auth:'ready',database:'connected'}:[{task_id:'limited',operation:'shopping_assistant',application_outcome:'accepted_with_limits',provider_outcome:'succeeded',source_ids:['listing:a:r1:price'],rejection:{stage:'claims',reason:'unsupported_number',field:'answer'}}]})));
- assert.match(document.body.textContent,/AI wording omitted at claims: unsupported_number · field answer/);
- assert.doesNotMatch(document.body.textContent,/Rejected at claims/);
+ await act(async()=>root.render(h(SystemStatus,{key:'limited-evidence',api:async(path)=>path==='/diagnostics'?{auth:'ready',database:'connected'}:[{task_id:'limited',operation:'shopping_assistant',application_outcome:'accepted_with_limits',provider_outcome:'succeeded',source_ids:['listing:a:r1:price'],rejection:{stage:'sources',reason:'unapproved_source',field:'answer'}}]})));
+ assert.match(document.body.textContent,/AI wording omitted at sources: unapproved_source · field answer/);
+ assert.doesNotMatch(document.body.textContent,/Rejected at sources/);
 });
 
 test('owner AI suggestions stay unsaved and cannot publish without approval',async()=>{

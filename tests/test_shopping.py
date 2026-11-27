@@ -227,7 +227,10 @@ class Shopping(unittest.TestCase):
             r=self.ask({**result,'answer':f'The listed price is $23,500 {citation}.'})
             self.assertEqual(r.status_code,200,r.text)
         for citation in ['[listing:foreign:r1:price]','[99]']:
-            self.assertEqual(self.ask({**result,'answer':f'The listed price is $23,500 {citation}.'}).status_code,503)
+            r=self.ask({**result,'answer':f'The listed price is $23,500 {citation}.'})
+            self.assertEqual(r.status_code,200,r.text)
+            self.assertEqual(r.json()['answer_mode'],'grounded_summary')
+            self.assertNotIn(citation,r.json()['answer'])
             self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['reason'],'unapproved_source')
 
     def test_budget_followup_preserves_seats_priority_and_selection(self):

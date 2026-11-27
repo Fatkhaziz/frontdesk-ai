@@ -2,7 +2,17 @@
 
 November 26, 2026 (Eastern). This update follows the fall submission baseline in PR #12.
 
-## Current delivery repair — validation version 6
+## Current citation handling — validation version 7
+
+The latest real failed request (owner-reported request ID `11cbf5bb-9002-42dc-9c3a-9533e2a1bb87`) returned provider success and failed at `sources / unapproved_source / answer`. It used 4,756 tokens and took 2,072 ms. Its raw answer was not retained, so the exact marker cannot be reconstructed from that diagnostic. This is a different failure category from the earlier numeric rejection.
+
+Version 6 incorrectly required a known single-bracket citation to be duplicated in `source_ids`, and treated a double-bracket citation to approved policy/knowledge as a scalar insertion with a missing value. Version 7 resolves known single, grouped and policy citations against the same published snapshot, collecting their canonical field/revision references. It does not resolve unknown references by guessing.
+
+If a model's inline reference is unusable, ALL model prose is discarded. The application separately validates the structured preferences, declared sources and recommendations, then may deliver a revalidated server fact summary as `accepted_with_limits`, preserving the `sources / unapproved_source / answer` reason. Foreign declared references, fabricated needs, invalid recommendations and stale snapshots remain blocked. No unknown citation or unsupported warranty claim is displayed or recorded as accepted evidence. No retry is introduced.
+
+Validation: 96 backend tests, 13 frontend tests and build pass locally. New regressions cover valid unlisted/grouped inline citations, approved knowledge markers, the exact reported rejection category recovering safely, and unchanged rejection of invalid structured data. The rendered workflow exercises normal policy citations and a limited source-failure response with mocked Auth/Grok. No live Grok call was made here. Read-only `GET /health` now shows `showcase_validation_version: 7` without signing in or making an AI call; this verifies which server code is loaded.
+
+## Earlier delivery repair — validation version 6
 
 The next manual request was again rejected at `claims / unsupported_number / answer`. Its exact model wording was not retained by the ordinary chat route, so the diagnostic alone cannot identify which quantity failed. The earlier recorded-response patch was insufficient for general model wording.
 
