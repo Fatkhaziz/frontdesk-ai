@@ -27,17 +27,19 @@ Open Safari. First open http://127.0.0.1:8000/health and check `showcase_validat
 
 The attempt guard is now 200; it is not 200 free calls. A shared conservative ledger caps preparation at $1.00 of the owner-declared $4.97 allowance and preserves at least $3.50 while preparation mode is active. Failed attempts remain reserved. The provider’s actual remaining credit must be checked separately at https://console.x.ai/. No top-up, purchase or automatic retry is enabled by this launcher.
 
-## 2 Open the two pages you need
+## 2 Open Showcase on the owner dashboard
 
-Stay in the signed-in owner page. Click Listings in the top navigation, then click Open customer inventory at the top right. That link opens a second Safari tab. The first tab is your owner dashboard; the new tab is the customer inventory for the same business. You do not need a private window or repeated keyboard shortcuts to practice this workflow.
+Click **Showcase** in the left sidebar of the signed-in owner dashboard. **Open inventory to compare** opens the customer's inventory. **Open Find my fit** opens the AI chat directly. **Open Owner knowledge** opens question suggestions and approval in the owner dashboard. **See published answers** opens the customer FAQ, including source notes the owner approved and questions routed to staff.
 
-Use the visible business-specific link rather than guessing an ID. The previously configured customer URL was http://127.0.0.1:8000/shop/demo-dealer/; if the current link uses a different ID, use the link from your dashboard. The sample Compact Hatch and City Hybrid records are explicitly fictional showcase examples.
+**Saved Grok responses** on Showcase shows the latest Terminal check already saved on this Mac. This view matches each turn to the business's saved request record and displays delivered answers, extracted budget and seats, source evidence and request IDs. A stopped check shows its recorded outcome. The page reads existing records without spending AI credit. Customer chat displays replies to its own messages. To keep those replies after closing the tab, use **Save conversation**.
+
+The previously configured customer URL was http://127.0.0.1:8000/shop/demo-dealer. The navigation on Showcase uses the ID of the signed-in business. Compact Hatch and City Hybrid are fictional showcase examples.
 
 ## 3 Perform the real AI acceptance check before class
 
 Version 7 asks the model to insert approved values through short source references; the server supplies the exact listing quantities. Known inline/grouped/policy citations resolve against the published snapshot. Normal accepted output is labeled an AI explanation. If numeric wording or inline citations cannot be verified but the structured needs, declared sources and recommendations passed checks, ALL model prose is discarded and a confirmed listing summary is displayed. Its evidence is `accepted_with_limits`, retaining the original safe rejection category and canonical source IDs. This is useful limited delivery, not proof that the model explanation passed. Invalid preferences, foreign declared references, stale publications and provider failures remain blocked. No second paid request is made automatically.
 
-Optional automated real check: launch with bash scripts/launch-showcase.sh --practice --verify-live. This sends up to three actual synthetic shopping requests (needs, budget change and fair-price), stops at the first rejection without retry, and saves accepted responses plus private raw diagnostics under Desktop/FrontDesk-AI-Live-Acceptance. It uses the same protected allowance. It does not test browser password sign-in. The default launch without --verify-live sends no inference. After this check, use the manual steps below to practice the interface and the owner question feature.
+Optional automated real check: launch with `bash scripts/launch-showcase.sh --practice --verify-live` if you need a new capture. This sends up to three synthetic shopping requests (needs, budget change and fair price) to the real provider, stops at the first rejection or limited answer, and saves the results under Desktop/FrontDesk-AI-Live-Acceptance. The default launch uses no AI credit. If a check already ran, read **Saved Grok responses** first. The steps below are available for deliberate practice from the browser.
 
 ## Owner questions — one paid request
 

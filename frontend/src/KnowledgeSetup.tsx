@@ -60,14 +60,14 @@ export default function KnowledgeSetup({
             decide what goes public.
           </p>
         </div>
-        <a
-          className="button"
-          href={"/shop/" + businessId}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Open customer inventory ↗
-        </a>
+        <div className="actions">
+          <a className="button" href={"/shop/" + businessId} target="_blank" rel="noreferrer">
+            Open customer inventory ↗
+          </a>
+          <a className="button" href={"/shop/" + businessId + "?view=questions"} target="_blank" rel="noreferrer">
+            See published answers ↗
+          </a>
+        </div>
       </div>
       {error && (
         <p role="alert" className="notice">

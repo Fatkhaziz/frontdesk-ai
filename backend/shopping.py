@@ -108,6 +108,15 @@ class InquiryStatus(Strict):
     status: Literal['open', 'pending', 'resolved']
 
 
+def public_knowledge(cards):
+    return [
+        {'id': card['id'], 'question': card['question'], 'status': card['status'],
+         'answer': card['answer'] if card['status'] == 'approved' else '',
+         'source_note': card.get('source_note', '') if card['status'] == 'approved' else ''}
+        for card in cards if card['status'] in ('approved', 'staff')
+    ]
+
+
 def catalog(business_id):
     with connect() as c:
         business = execute(c, 'SELECT name FROM businesses WHERE id=%s', (business_id,)).fetchone()
@@ -120,7 +129,7 @@ def catalog(business_id):
         profile = execute(c, 'SELECT published,published_revision FROM business_profiles WHERE business_id=%s', (business_id,)).fetchone()
     return {'business_id': business_id, 'name': business['name'],
             'listings': [{'id': r['id'], 'revision': r['published_revision'], **json.loads(r['published'])} for r in rows],
-            'knowledge': json.loads(knowledge['published']) if knowledge and knowledge['published'] else [],
+            'knowledge': public_knowledge(json.loads(knowledge['published'])) if knowledge and knowledge['published'] else [],
             'knowledge_revision': knowledge['published_revision'] if knowledge and knowledge['published'] else None,
             'profile': json.loads(profile['published']) if profile and profile['published'] else None,
             'profile_revision': profile['published_revision'] if profile and profile['published'] else None}
@@ -495,7 +504,7 @@ def create_router(identity, owner):
         state = knowledge_state(member['business_id'])
         if body.expected_revision != state['revision']:
             raise HTTPException(409, 'Knowledge changed. Reload and review.')
-        cards = [c for c in state['cards'] if c['status'] in ('approved', 'staff')]
+        cards = public_knowledge(state['cards'])
         with connect() as c:
             row = execute(c, 'UPDATE dealer_knowledge SET published=%s,published_revision=revision,approved_by=%s WHERE business_id=%s AND revision=%s RETURNING revision', (json.dumps(cards), member['subject'], member['business_id'], body.expected_revision)).fetchone()
             if not row:

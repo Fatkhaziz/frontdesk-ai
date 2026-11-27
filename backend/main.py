@@ -19,6 +19,7 @@ from .ai import call_ai, now
 from .demo import fields_for_question
 from .errors import error_category
 from .business import create_router, format_inquiry
+from .showcase_rehearsal import latest_capture, local_showcase_enabled
 
 app = FastAPI(title='FrontDesk AI feasibility demo')
 log = logging.getLogger('frontdesk')
@@ -162,7 +163,14 @@ def config():
     url, key = supabase_config()
     return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled(),
             'shoppingAiEnabled':question_mode() == 'ai' and bool(os.getenv('XAI_API_KEY') and os.getenv('XAI_MODEL')),
-            'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'}
+            'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1',
+            'localShowcase': local_showcase_enabled()}
+
+@app.get('/api/assistant/saved-rehearsal')
+def saved_rehearsal(member=Depends(owner)):
+    if not local_showcase_enabled():
+        raise HTTPException(404, 'Saved rehearsal is available in the local showcase.')
+    return {'run': latest_capture(member['business_id'])}
 
 @app.get('/api/listings')
 def listings(m=Depends(identity)):

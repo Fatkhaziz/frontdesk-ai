@@ -26,6 +26,7 @@ def main():
         print('Local preflight failed: ' + type(exc).__name__ + ' (' + error_category(exc) + '). Check local settings privately.', flush=True)
         return 1
     import uvicorn
+    os.environ['FRONTDESK_LOCAL_SHOWCASE'] = '1'
     uvicorn.run('backend.main:app', host='127.0.0.1', port=8000, access_log=False)
     return 0
 

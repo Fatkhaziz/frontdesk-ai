@@ -15,6 +15,13 @@ type Vehicle = {
   facts: Facts;
   description: string;
 };
+type PublishedQuestion = {
+  id: string;
+  question: string;
+  status: "approved" | "staff";
+  answer: string;
+  source_note: string;
+};
 type Preferences = {
   budget_cents: number | null;
   budget_kind: string;
@@ -87,9 +94,14 @@ export default function PublicShop({
   const [data, setData] = useState<{
       name: string;
       listings: Vehicle[];
-      knowledge: any[];
+      knowledge: PublishedQuestion[];
     } | null>(null),
-    [tab, setTab] = useState("Inventory"),
+    [tab, setTab] = useState(() => {
+      const view = new URLSearchParams(window.location.search).get("view");
+      if (view === "fit") return "Find my fit";
+      if (view === "questions") return "FAQs";
+      return "Inventory";
+    }),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<string[]>([]),
@@ -301,7 +313,7 @@ export default function PublicShop({
         </div>
       </div>
       <nav className="shop-nav" aria-label="Shopping sections">
-        {["Inventory", "Find my fit", "Compare"].map((t) => (
+        {["Inventory", "Find my fit", "Compare", "FAQs"].map((t) => (
           <button
             key={t}
             aria-current={tab === t ? "page" : undefined}
@@ -619,6 +631,25 @@ export default function PublicShop({
               </div>
             </>
           )}
+          {tab === "FAQs" && (
+            <section>
+              <h2>Owner-approved questions and answers</h2>
+              {!data.knowledge.length && <p className="muted">No questions have been published yet.</p>}
+              {data.knowledge.map((item) => (
+                <details className="evidence-card" key={item.id}>
+                  <summary>{item.question}</summary>
+                  {item.status === "approved" ? (
+                    <>
+                      <p className="saved-reply">{item.answer}</p>
+                      {item.source_note && <p><strong>Source</strong> {item.source_note}</p>}
+                    </>
+                  ) : (
+                    <p>Staff can confirm this. Use Ask staff to follow up below.</p>
+                  )}
+                </details>
+              ))}
+            </section>
+          )}
           {tab === "Compare" && (
             <>
               <div className="section-heading">
@@ -763,7 +794,9 @@ export default function PublicShop({
                 <div className="starter-prompts">
                   {[
                     "I have $25,000 and commute every day. What should I consider?",
-                    "I need space for my family but I am not sure which car fits.",
+                    "I need five seats and room for a stroller. Which options have documented cargo space?",
+                    "I drive on snowy roads and require AWD. Which listings confirm it?",
+                    "I drive a long way for work. Compare fuel economy and mileage, and tell me what else I should check.",
                     "Is this a fair price? What can you actually verify?",
                   ].map((t) => (
                     <button key={t} onClick={() => setQuestion(t)}>

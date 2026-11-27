@@ -14,10 +14,11 @@ from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
 os.chdir(Path(__file__).resolve().parent.parent)
-os.environ.update(SUPABASE_URL='https://showcase.invalid',SUPABASE_PUBLISHABLE_KEY='sb_publishable_mock')
+os.environ.update(SUPABASE_URL='https://showcase.invalid',SUPABASE_PUBLISHABLE_KEY='sb_publishable_mock',FRONTDESK_LOCAL_SHOWCASE='1')
 from tests.test_shopping import Shopping
 from backend.main import app
 from backend.shopping import Preferences, eligible
+from scripts.acceptance_live import verify
 from playwright.sync_api import sync_playwright, expect
 import uvicorn
 
@@ -53,7 +54,9 @@ def main():
             'follow_up':'Would you prioritize a lower purchase price or additional passenger space?',
             'recommended_ids':[l['id'] for l in matches[:2]],'source_ids':[s['id'] for s in payload['sources'] if any(l['id']==s['listing_id'] for l in matches[:2])][:25]})
     try:
-        with patch('backend.showcase_ai.provider_call',side_effect=provider),sync_playwright() as p:
+        captures=Path(fixture.tmp.name)/'captures'
+        with patch('backend.showcase_ai.provider_call',side_effect=provider) as grok, \
+             patch('backend.showcase_rehearsal.captures_directory',return_value=captures), sync_playwright() as p:
             browser=p.chromium.launch(headless=True,executable_path=os.getenv('FRONTDESK_BROWSER_EXECUTABLE') or None)
             context=browser.new_context(viewport={'width':1440,'height':1000});errors=[]
             page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
@@ -76,6 +79,27 @@ def main():
             page.get_by_role('checkbox').check();page.get_by_role('button',name='Publish reviewed knowledge',exact=True).click()
             expect(page.get_by_role('status')).to_contain_text('Reviewed knowledge published')
             page.screenshot(path='/tmp/frontdesk-owner-knowledge.png',full_page=True)
+            assert verify('a',captures/'20261127T020000Z')
+            calls=grok.call_count
+            page.get_by_role('button',name='Showcase',exact=True).click()
+            expect(page.get_by_role('heading',name='Dealership showcase',exact=True)).to_be_visible()
+            expect(page.get_by_text('Accepted Grok reply',exact=True)).to_have_count(3)
+            expect(page.get_by_text('lower-priced option',exact=False)).to_have_count(3)
+            page.screenshot(path='/tmp/frontdesk-saved-grok-responses.png',full_page=True)
+            with context.expect_page() as fit_tab:
+                page.get_by_role('link',name='Open Find my fit',exact=True).click()
+            expect(fit_tab.value.get_by_label('Your message')).to_be_visible()
+            fit_tab.value.close()
+            with context.expect_page() as faq_tab:
+                page.get_by_role('link',name='See published answers',exact=True).click()
+            faq=faq_tab.value
+            expect(faq.get_by_role('heading',name='Owner-approved questions and answers')).to_be_visible()
+            faq.get_by_text('What warranty applies?',exact=True).click()
+            expect(faq.get_by_text('Ask staff for the written warranty terms before purchase.',exact=True)).to_be_visible()
+            faq.get_by_text('Is accident history available?',exact=True).click()
+            expect(faq.get_by_text('Staff can confirm this.',exact=False)).to_be_visible()
+            faq.close()
+            assert grok.call_count==calls, 'Opening showcase pages unexpectedly requested inference'
             shop=context.new_page();shop.on('pageerror',lambda e:errors.append(str(e)));shop.goto('http://127.0.0.1:8003/shop/a')
             expect(shop.get_by_role('heading',name='Published inventory',exact=True)).to_be_visible()
             shop.screenshot(path='/tmp/frontdesk-shopping-inventory.png',full_page=True)
