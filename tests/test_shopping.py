@@ -201,6 +201,7 @@ class Shopping(unittest.TestCase):
         self.assertEqual(next(l for l in payload['inventory'] if l['id']==self.ids[0])['facts']['price_usd'],'23500.00')
         self.assertNotIn('price',payload['inventory'][0]['facts'])
         self.assertEqual(set(comparison['inputs']),set(prices))
+        self.assertTrue(any(source.get('inputs') for source in payload['sources']))
         rejected=self.ask({**result,'answer':'The difference is $3,100.'},selected_ids=self.ids)
         self.assertEqual(rejected.status_code,503,rejected.text)
         self.assertNotIn('$3,100',rejected.text)

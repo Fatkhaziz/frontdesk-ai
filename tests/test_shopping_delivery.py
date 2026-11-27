@@ -21,7 +21,7 @@ class ShoppingDelivery(unittest.TestCase):
                 'source_ids': [], **changes}
 
     def test_provider_uses_short_refs_but_customer_and_evidence_use_canonical_ids(self):
-        sources = source_list(catalog('a'))
+        sources = source_list(catalog('a'), include_comparisons=False)
         aliases = {s['id']: f'S{i+1}' for i, s in enumerate(sources)}
         price = self.result()['source_ids'][0]
         mpg = next(s['id'] for s in sources if s['listing_id'] == self.ids[0] and s['id'].endswith(':mpg_combined'))
@@ -38,6 +38,7 @@ class ShoppingDelivery(unittest.TestCase):
         self.assertEqual(set(r.json()['source_ids']), {price, mpg})
         supplied = provider.call_args.args[1]['sources']
         self.assertTrue(all(s['id'].startswith('S') and 'sha256' not in s for s in supplied))
+        self.assertFalse(any(s.get('inputs') for s in supplied))
         row = self.client.get('/api/assistant/evidence').json()[0]
         self.assertEqual(row['application_outcome'], 'accepted')
         self.assertEqual(set(row['source_ids']), {price, mpg})
@@ -129,7 +130,7 @@ class ShoppingDelivery(unittest.TestCase):
         card={'id':'policy','question':'What warranty applies?','answer':'Ask staff for the written warranty policy.','status':'approved','source_note':'Reviewed','reason':''}
         self.client.put('/api/dealer/knowledge',json={'expected_revision':0,'cards':[card]})
         self.client.post('/api/dealer/knowledge/publish',json={'expected_revision':1,'confirm_approval':True})
-        sources=source_list(catalog('a'))
+        sources=source_list(catalog('a'), include_comparisons=False)
         source=next(s for s in sources if s['id'].startswith('knowledge:'))
         alias='S'+str(sources.index(source)+1)
         r=self.ask(self.result(answer=f'Ask staff for the written warranty policy [[{alias}]].'))

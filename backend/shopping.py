@@ -179,7 +179,7 @@ COMPARISON_FIELDS = {'price': (100, 'USD vehicle price'), 'mileage': (1, 'miles'
                      'cargo_cubic_feet': (1, 'cubic feet'), 'year': (1, 'model years')}
 
 
-def source_list(data, prefs=None):
+def source_list(data, prefs=None, *, include_comparisons=True):
     result = []
     def add(identity, label, text, listing_id=None, reference=None, value_text=None):
         result.append({'id': identity, 'label': label, 'text': text, 'listing_id': listing_id,
@@ -202,7 +202,8 @@ def source_list(data, prefs=None):
             add(f"listing:{l['id']}:r{l['revision']}:budget_gap", f'{title} · calculated budget difference',
                 f"{title}: ${abs(delta)/100:,.2f} {'below' if delta >= 0 else 'above'} the stated ${prefs.budget_cents/100:,.2f} budget, before unknown taxes/fees.", l['id'])
     # Deterministic differences retain the exact field/revision provenance.
-    for left, right in combinations(data['listings'], 2):
+    comparison_listings = data['listings'] if include_comparisons else ()
+    for left, right in combinations(comparison_listings, 2):
         for field, (scale, unit) in COMPARISON_FIELDS.items():
             values = [car['facts'].get(field) for car in (left, right)]
             if any(type(value) not in (int, float) for value in values):
@@ -471,7 +472,9 @@ def create_router(identity, owner):
         # Preferences can change on this turn. Do not send computed gaps for
         # the previous budget as if they described the new one. Validate the
         # resulting budget arithmetic against cited prices after extraction.
-        sources = source_list(context)
+        # Broad discovery needs individual facts. Pairwise calculations are
+        # useful once the buyer selects vehicles, and otherwise grow quadratically.
+        sources = source_list(context, include_comparisons=bool(selected))
         provider_inventory = [{**l, 'facts': {**{k: v for k, v in l['facts'].items() if k != 'price'},
                                                'price_usd': f"{l['facts']['price'] / 100:.2f}"}} for l in context['listings']]
         payload = {'business_id': business_id, 'business_name': data['name'], 'message': body.message,
