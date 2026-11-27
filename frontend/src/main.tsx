@@ -18,7 +18,9 @@ import PublicBusiness from "./PublicBusiness";
 import PublicShop from "./PublicShop";
 import KnowledgeSetup from "./KnowledgeSetup";
 import { Workspace } from "./business";
+import Icon from "./Icon";
 import "./style.css";
+import "./workspace.css";
 function App() {
   const [config, setConfig] = useState<Config | null>(null),
     [token, setToken] = useState("");
@@ -134,19 +136,18 @@ function App() {
   }, [!!token]);
   const salon = workspace?.profile && workspace.profile.domain !== "dealership";
   const tabs = [
-    "Business settings",
     ...(!salon ? ["Listings"] : []),
+    ...(workspace?.role === "owner" ? ["Owner knowledge"] : []),
     "Inquiries",
-    ...(workspace?.role === "owner"
-      ? ["Owner knowledge", "System status"]
-      : []),
+    "Business settings",
+    ...(workspace?.role === "owner" ? ["System status"] : []),
   ];
   const visibleTab = tabs.includes(tab) ? tab : "Business settings";
   return (
     <main className={token && !shopId && !businessId && !lid ? "owner-app" : "public-app"}>
-      <header>
+      {(!token || shopId || businessId || lid) && <header>
         <a className="brand" href="/">
-          FrontDesk <strong>AI</strong>
+          <Icon name="brand" /> FrontDesk <strong>AI</strong>
         </a>
         <span>
           {token
@@ -154,7 +155,7 @@ function App() {
             : "For small businesses"}{" "}
           <span className="header-tag">Fall Release 1</span>
         </span>
-      </header>
+      </header>}
       {config?.rehearsal && (
         <p className="notice">
           Rehearsal only · Synthetic local data · Simulated sign-in · Paid AI
@@ -237,28 +238,10 @@ function App() {
           </section>
         </div>
       ) : (
-        <>
-          <div className="dashboard-heading">
-            <div>
-              <p className="eyebrow">Business workspace</p>
-              <h1>Your front desk</h1>
-            </div>
-            <button
-              disabled={busy}
-              onClick={() => {
-                authClient?.auth.signOut();
-                setToken("");
-                setTab("Business settings");
-                setWorkspace(null);
-                setCars([]);
-                setInbox([]);
-                setCar(null);
-                setMessage("Signed out.");
-              }}
-            >
-              Sign out
-            </button>
-          </div>
+        <div className="owner-shell">
+          <aside className="workspace-sidebar" aria-label="Business workspace">
+            <a className="brand side-brand" href="/"><Icon name="brand" /> FrontDesk <strong>AI</strong></a>
+            <p className="sidebar-label">Workspace</p>
           <nav aria-label="Dashboard sections">
             {tabs.map((t) => (
               <button
@@ -271,7 +254,7 @@ function App() {
                   setMessage("");
                 }}
               >
-                {t}
+                <Icon name={t} /><span>{t}</span>
                 {t === "Inquiries" && (
                   <span className="count">
                     {inbox.filter((i) => i.status === "open").length}
@@ -280,6 +263,17 @@ function App() {
               </button>
             ))}
           </nav>
+            <div className="sidebar-bottom">
+              {workspace && <a className="sidebar-preview" href={"/shop/" + workspace.id} target="_blank" rel="noreferrer">Customer website <Icon name="arrow" /></a>}
+              <div className="sidebar-account"><span className="account-avatar">{(workspace?.name || email || "B").slice(0,1).toUpperCase()}</span><span><strong>{workspace?.profile?.name || workspace?.name || "Your business"}</strong><small>{workspace?.role === "owner" ? "Owner workspace" : "Staff workspace"}</small></span></div>
+              <button className="signout-button" disabled={busy} onClick={() => { authClient?.auth.signOut(); setToken(""); setTab("Business settings"); setWorkspace(null); setCars([]); setInbox([]); setCar(null); setMessage("Signed out."); }}><Icon name="logout" /> Sign out</button>
+              <small className="release-marker">Workspace 2 · Fall Release 1</small>
+            </div>
+          </aside>
+          <div className="workspace-main">
+            <header className="workspace-topbar"><span>Workspace <span className="breadcrumb-divider">/</span> <strong>{visibleTab}</strong></span><span className="access-label">{workspace?.role === "owner" ? "Owner access" : "Staff access"}</span></header>
+            <div className="workspace-content">
+              {visibleTab === "Listings" && <div className="dashboard-heading"><div><p className="eyebrow">Your business, at a glance</p><h1>Your front desk</h1></div><div className="workspace-metrics" aria-label="Workspace summary"><span><strong>{cars.filter(c => c.published_revision !== null).length}</strong> Published</span><span><strong>{cars.filter(c => c.published_revision === null).length}</strong> Private drafts</span><span><strong>{inbox.filter(i => i.status === "open").length}</strong> Open inquiries</span></div></div>}
           {message && (
             <p className="notice" role="status" aria-live="polite">
               {message}
@@ -560,14 +554,16 @@ function App() {
             </section>
           )}
           {visibleTab === "System status" && <SystemStatus api={api} />}
-        </>
+            </div>
+          </div>
+        </div>
       )}
       {!token && message && (
         <p role="alert" className="notice">
           {message}
         </p>
       )}
-      <footer>FrontDesk AI · Fall Release 1 small-business prototype</footer>
+      <footer>FrontDesk AI · Fall Release 1 <span className="release-marker">Workspace 2</span></footer>
     </main>
   );
 }

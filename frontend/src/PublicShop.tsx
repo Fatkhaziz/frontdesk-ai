@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Icon from "./Icon";
 import {
   Api,
   Config,
@@ -101,9 +102,7 @@ export default function PublicShop({
     [comparison, setComparison] = useState<any>(null),
     [recommended, setRecommended] = useState<string[]>([]),
     [matches, setMatches] = useState<string[] | null>(null);
-  const [preferencesOpen, setPreferencesOpen] = useState(
-    window.innerWidth > 720,
-  );
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [contact, setContact] = useState(""),
     [summary, setSummary] = useState(""),
     [consent, setConsent] = useState(false),
@@ -129,10 +128,11 @@ export default function PublicShop({
     if (container) container.scrollTop = container.scrollHeight;
   }, [messages, aiBusy]);
   useEffect(() => {
-    const resize = () => setPreferencesOpen(window.innerWidth > 720);
+    const resize = () => setPreferencesOpen(tab === "Find my fit" && window.innerWidth > 960);
+    resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
-  }, []);
+  }, [tab]);
   async function work(fn: () => Promise<void>, isAi = false) {
     if (lock.current) return;
     lock.current = true;
@@ -275,15 +275,15 @@ export default function PublicShop({
     return <p role="status">{error || "Loading published inventory…"}</p>;
   const chosen = data.listings.filter((l) => selected.includes(l.id));
   return (
-    <div className="shop">
+    <div className="shop" data-view={tab}>
       <div className="shop-hero">
         <div>
           <p className="eyebrow">{data.name} · FrontDesk AI</p>
-          <h1>Find the car that fits your life.</h1>
+          <h1>{tab === "Find my fit" ? "Tell us what matters." : <>Find your next car.<br /><span>Know why it fits.</span></>}</h1>
           <p className="lead">
-            Tell us what matters. Compare approved facts. Understand the
-            trade-offs.
+            Explore reviewed inventory, compare the details, and get an explanation built around your needs.
           </p>
+          <button className="hero-cta" onClick={() => setTab("Find my fit")}>Help me choose <Icon name="arrow" /></button>
         </div>
         <div className="hero-stamp">
           <strong>
@@ -293,7 +293,7 @@ export default function PublicShop({
             }
           </strong>
           <span>available vehicles</span>
-          <small>Owner-reviewed information</small>
+          <small>Reviewed information.<br />A clearer starting point.</small>
         </div>
       </div>
       <nav className="shop-nav" aria-label="Shopping sections">
@@ -328,7 +328,7 @@ export default function PublicShop({
           {notice}
         </p>
       )}
-      <div className="shop-layout">
+      <div className={"shop-layout" + (tab === "Find my fit" ? " fit-layout" : "")}>
         <aside className="preference-panel">
           <details
             open={preferencesOpen}

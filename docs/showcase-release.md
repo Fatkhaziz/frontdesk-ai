@@ -1,6 +1,6 @@
 # FrontDesk AI current showcase and acceptance guide
 
-Current as of November 26, 2026. This replaces historical capped-attempt handoffs.
+Current as of November 26, 2026. Workspace 2 startup/design and real-response replay update: [update notes](workspace-2-update.md). This replaces historical capped-attempt handoffs.
 
 FrontDesk AI Practice, Showcase and Technical Evidence Guide
 
@@ -23,7 +23,7 @@ bash scripts/launch-showcase.sh
 
 The script loads the existing private configuration, checks Auth/database connectivity, applies pending migration 006, preserves existing records and usage, builds the website and starts the app. It makes no AI inference during launch. Keep this Terminal open. If it reports a migration/configuration error, stop there and retain the safe error category; do not paste credentials into chat or reset the database.
 
-Open Safari. Click the address bar once, type http://127.0.0.1:8000/ and press Return. Sign in privately with the existing owner email/password. Click System status and Refresh status. Check Auth ready, PostgreSQL connected, validation version 4 in Technical API diagnostics, and the practice-budget panel. The historical attempt count should remain at its real value; it must not reset to zero.
+Open Safari. Click the address bar once, type http://127.0.0.1:8000/ and press Return. Sign in privately with the existing owner email/password. Click System status and Refresh status. Check Auth ready, PostgreSQL connected, validation version 5 in Technical API diagnostics, and the practice-budget panel. The historical attempt count should remain at its real value; it must not reset to zero.
 
 The attempt guard is now 200; it is not 200 free calls. A shared conservative ledger caps preparation at $1.00 of the owner-declared $4.97 allowance and preserves at least $3.50 while preparation mode is active. Failed attempts remain reserved. The provider’s actual remaining credit must be checked separately at https://console.x.ai/. No top-up, purchase or automatic retry is enabled by this launcher.
 

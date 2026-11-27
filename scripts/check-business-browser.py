@@ -22,7 +22,8 @@ with sync_playwright() as playwright:
         page.get_by_label('Email', exact=True).fill(email)
         page.get_by_label('Password', exact=True).fill('rehearsal')
         page.get_by_role('button', name='Sign in', exact=True).click()
-        expect(page.get_by_role('heading', name='Your front desk')).to_be_visible()
+        expect(page.get_by_role('navigation', name='Dashboard sections')).to_be_visible()
+        expect(page.get_by_role('button', name='Business settings', exact=True)).to_be_visible()
 
     login('owner-motors@example.invalid')
     page.get_by_role('button', name='Business settings', exact=True).click()
