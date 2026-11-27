@@ -33,6 +33,7 @@ export type Config = {
   aiEnabled: boolean;
   shoppingAiEnabled?: boolean;
   rehearsal?: boolean;
+  localShowcase?: boolean;
 };
 export type Api = (
   path: string,

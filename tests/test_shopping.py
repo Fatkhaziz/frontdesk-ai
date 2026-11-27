@@ -111,6 +111,24 @@ class Shopping(unittest.TestCase):
         self.assertEqual(self.client.post('/api/dealer/knowledge/publish',json={'expected_revision':1,'confirm_approval':True}).status_code,409)
         self.assertEqual(self.client.put('/api/dealer/knowledge',json={'expected_revision':0,'cards':[]}).status_code,409)
 
+    def test_public_faqs_hide_private_fields_from_staff_and_legacy_cards(self):
+        approved={'id':'approved','question':'Where are the terms?','answer':'Ask for the printed policy.','status':'approved','source_note':'Policy manual','reason':'PRIVATE-REASON'}
+        staff={**approved,'id':'staff','status':'staff','question':'Was this vehicle repaired?','answer':'PRIVATE-ANSWER','source_note':'PRIVATE-NOTE'}
+        draft={**approved,'id':'draft','status':'draft','question':'PRIVATE-DRAFT'}
+        cards=[approved,staff,draft]
+        self.assertEqual(self.client.put('/api/dealer/knowledge',json={'expected_revision':0,'cards':cards}).status_code,200)
+        self.assertEqual(self.client.post('/api/dealer/knowledge/publish',json={'expected_revision':1,'confirm_approval':True}).status_code,200)
+        # Older snapshots may contain private fields. Read-time projection
+        # protects them without changing the owner's saved draft.
+        with connect() as c:
+            execute(c,'UPDATE dealer_knowledge SET published=%s WHERE business_id=%s',(json.dumps(cards),'a'))
+        public=self.client.get('/api/shop/a')
+        self.assertEqual(public.status_code,200)
+        self.assertNotIn('PRIVATE-',public.text)
+        self.assertEqual(public.json()['knowledge'][0]['source_note'],'Policy manual')
+        self.assertEqual(public.json()['knowledge'][1]['status'],'staff')
+        self.assertIn('PRIVATE-ANSWER', self.client.get('/api/dealer/knowledge').text)
+
     def test_roles_and_business_scoping(self):
         self.ask()
         self.member={'subject':'owner-b','business_id':'b','role':'owner'}

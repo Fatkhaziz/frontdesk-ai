@@ -17,6 +17,7 @@ import BusinessSettings from "./BusinessSettings";
 import PublicBusiness from "./PublicBusiness";
 import PublicShop from "./PublicShop";
 import KnowledgeSetup from "./KnowledgeSetup";
+import Showcase from "./Showcase";
 import { Workspace } from "./business";
 import Icon from "./Icon";
 import "./style.css";
@@ -137,6 +138,7 @@ function App() {
   const salon = workspace?.profile && workspace.profile.domain !== "dealership";
   const tabs = [
     ...(!salon ? ["Listings"] : []),
+    ...(!salon && config?.localShowcase && workspace?.role === "owner" ? ["Showcase"] : []),
     ...(workspace?.role === "owner" ? ["Owner knowledge"] : []),
     "Inquiries",
     "Business settings",
@@ -287,6 +289,9 @@ function App() {
               notify={setMessage}
               businessId={workspace.id}
             />
+          )}
+          {visibleTab === "Showcase" && workspace && (
+            <Showcase api={api} businessId={workspace.id} openKnowledge={() => setTab("Owner knowledge")} />
           )}
           {visibleTab === "Business settings" && workspace && (
             <BusinessSettings

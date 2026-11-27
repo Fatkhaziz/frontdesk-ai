@@ -13,13 +13,8 @@ from backend.main import app
 from backend.db import connect, execute
 from backend.shopping import catalog, Preferences
 from backend import showcase_ai
+from backend.showcase_rehearsal import QUESTIONS, captures_directory
 from backend.spending import PRICED_MODEL, status
-
-QUESTIONS = [
-    'My vehicle-price budget is $25,000. I need five seats for commuting and prefer fuel economy. Compare my selected vehicles, explain missing information and ask one useful follow-up.',
-    'Raise my vehicle-price budget to $30,000 and retain five seats. Which selected option fits my priorities better now?',
-    'Is this a fair price? Explain what you can verify and what information you would still need.',
-]
 
 
 def verify(business, destination):
@@ -76,7 +71,7 @@ def main():
     if len(owners)!=1:
         raise RuntimeError('A single configured owner business is required; no request sent.')
     os.umask(0o077)
-    folder=Path.home()/'Desktop'/'FrontDesk-AI-Live-Acceptance'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    folder=captures_directory()/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     return 0 if verify(owners[0]['business_id'],folder) else 1
 
 
