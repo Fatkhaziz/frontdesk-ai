@@ -66,7 +66,11 @@ class Shopping(unittest.TestCase):
         self.assertEqual(r.status_code,200,r.text)
         self.assertEqual(r.json()['preferences']['min_seats'],5)
         bad={**result,'answer':'1. It has seven seats.'}
-        self.assertEqual(self.ask(bad,message='I need five seats').status_code,503)
+        limited=self.ask(bad,message='I need five seats')
+        self.assertEqual(limited.status_code,200,limited.text)
+        self.assertEqual(limited.json()['answer_mode'],'grounded_summary')
+        self.assertNotIn('seven seats',limited.json()['answer'])
+        self.assertIn('5 seats',limited.json()['answer'])
 
     def test_explicit_budget_or_seats_cannot_be_ignored(self):
         self.assertEqual(self.ask(self.result(),message='My vehicle-price budget is $25,000').status_code,503)
@@ -147,9 +151,14 @@ class Shopping(unittest.TestCase):
         self.assertTrue(all(r['provider_outcome']=='succeeded' and r['application_outcome']=='invalid_output' for r in records))
         self.assertTrue(any(r['rejection']['source_id']==f'listing:{self.ids[1]}:r1:price' for r in records))
 
-    def test_foreign_sources_invented_numbers_and_truncated_output_rejected(self):
-        for result in [self.result(source_ids=['foreign-business:price']),self.result(answer='This vehicle costs $9,999.'),self.result(recommended_ids=['foreign-vehicle'])]:
+    def test_foreign_sources_and_truncated_output_rejected_numeric_wording_omitted(self):
+        for result in [self.result(source_ids=['foreign-business:price']),self.result(recommended_ids=['foreign-vehicle'])]:
             self.assertEqual(self.ask(result).status_code,503)
+        limited=self.ask(self.result(answer='This vehicle costs $9,999.'))
+        self.assertEqual(limited.status_code,200,limited.text)
+        self.assertEqual(limited.json()['answer_mode'],'grounded_summary')
+        self.assertNotIn('$9,999',limited.json()['answer'])
+        self.assertIn('$23,500.00',limited.json()['answer'])
         envelope=self.envelope(self.result());envelope['choices'][0]['finish_reason']='length'
         with patch('backend.showcase_ai.provider_call',return_value=envelope):
             self.assertEqual(self.client.post('/api/shop/a/assist',json={'message':'Help me'}).status_code,503)
@@ -178,7 +187,10 @@ class Shopping(unittest.TestCase):
         self.assertEqual(next(l for l in payload['inventory'] if l['id']==self.ids[0])['facts']['price_usd'],'23500.00')
         self.assertNotIn('price',payload['inventory'][0]['facts'])
         self.assertEqual(set(comparison['inputs']),set(prices))
-        self.assertEqual(self.ask({**result,'answer':'The difference is $3,100.'},selected_ids=self.ids).status_code,503)
+        limited=self.ask({**result,'answer':'The difference is $3,100.'},selected_ids=self.ids)
+        self.assertEqual(limited.status_code,200,limited.text)
+        self.assertNotIn('$3,100',limited.json()['answer'])
+        self.assertEqual(limited.json()['answer_mode'],'grounded_summary')
         rejection=self.client.get('/api/assistant/evidence').json()[0]['rejection']
         self.assertEqual(rejection,{'stage':'claims','reason':'unsupported_number','field':'answer','source_id':None})
 
@@ -186,7 +198,10 @@ class Shopping(unittest.TestCase):
         sources=source_list(catalog('a'))
         refs=[s['id'] for s in sources if s['listing_id']==self.ids[0] and s['id'].endswith((':price',':mpg_combined'))]
         r=self.ask(self.result(answer='This vehicle costs $45.',source_ids=refs))
-        self.assertEqual(r.status_code,503)
+        self.assertEqual(r.status_code,200,r.text)
+        self.assertEqual(r.json()['answer_mode'],'grounded_summary')
+        self.assertNotIn('$45.',r.json()['answer'])
+        self.assertIn('$23,500.00 USD',r.json()['answer'])
         self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['reason'],'unsupported_number')
 
     def test_valid_specification_difference_is_not_an_invented_number(self):
@@ -225,7 +240,10 @@ class Shopping(unittest.TestCase):
         self.assertEqual(r.status_code,200,r.text)
         self.assertEqual(r.json()['preferences'],new)
         self.assertFalse(any(s['id'].endswith(':budget_gap') for s in provider.call_args.args[1]['sources']))
-        self.assertEqual(self.ask({**result,'answer':'Your new $30,000 budget is $1,500 above the $23,500 price.'},message=message,preferences=old).status_code,503)
+        limited=self.ask({**result,'answer':'Your new $30,000 budget is $1,500 above the $23,500 price.'},message=message,preferences=old)
+        self.assertEqual(limited.status_code,200,limited.text)
+        self.assertNotIn('$1,500',limited.json()['answer'])
+        self.assertEqual(limited.json()['preferences'],new)
         for changed,field in [({'min_seats':None},'min_seats'),({'priorities':[]},'priorities'),({'budget_kind':'unknown'},'budget_kind')]:
             self.assertEqual(self.ask({**result,'preferences':{**new,**changed}},message=message,preferences=old).status_code,503)
             self.assertEqual(self.client.get('/api/assistant/evidence').json()[0]['rejection']['field'],field)
@@ -234,7 +252,7 @@ class Shopping(unittest.TestCase):
     def test_safe_diagnostics_cover_parse_preferences_sources_and_followup(self):
         cases=[(self.envelope(self.result(preferences={'budget_cents':'PRIVATE-CONTACT-SECRET'})), 'preferences','invalid_preferences','budget_cents'),
                (self.envelope(self.result(source_ids=['Bearer PRIVATE-CONTACT-SECRET'])), 'sources','unapproved_source','source_ids'),
-               (self.envelope(self.result(follow_up='Would a $9,999 price help?')), 'claims','unsupported_number','follow_up'),
+               (self.envelope(self.result(answer='It is guaranteed safe.')), 'claims','unsupported_guarantee','answer'),
                ({'choices':[]}, 'envelope','invalid_envelope',None),
                (self.envelope(self.result()), 'json','invalid_json',None)]
         cases[-1][0]['choices'][0]['message']['content']='{"answer":"PRIVATE-CONTACT-SECRET","answer":NaN}'

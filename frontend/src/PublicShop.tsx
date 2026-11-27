@@ -72,6 +72,7 @@ type Message = {
   sources: any[];
   task_id?: string;
   request_id?: string;
+  answer_mode?: "ai_explanation" | "grounded_summary";
 };
 
 export default function PublicShop({
@@ -253,11 +254,14 @@ export default function PublicShop({
           sources: r.sources,
           task_id: r.task_id,
           request_id: r.request_id,
+          answer_mode: r.answer_mode,
         },
       ]);
       setQuestion("");
       setNotice(
-        "Answer received from live AI and checked against published source IDs. Review the facts and limitations below.",
+        r.answer_mode === "grounded_summary"
+          ? "Some AI wording could not be verified. Showing confirmed listing details instead. Your checked preferences are retained."
+          : "Answer received from live AI and checked against published source IDs. Review the facts and limitations below.",
       );
     }, true);
   }
@@ -781,7 +785,10 @@ export default function PublicShop({
                     </p>
                     <div className="bubble assistant">
                       <strong>FrontDesk AI</strong>
-                      <p>{m.answer}</p>
+                      {m.answer_mode === "grounded_summary" && (
+                        <p className="privacy">Confirmed listing summary · unverified AI wording was omitted.</p>
+                      )}
+                      <p style={{whiteSpace: "pre-line"}}>{m.answer}</p>
                       {m.follow_up && (
                         <p className="followup-question">{m.follow_up}</p>
                       )}
@@ -809,8 +816,9 @@ export default function PublicShop({
                         </details>
                       )}
                       <small>
-                        Live AI · response checked against published source
-                        references. Recommendations still require judgment.
+                        {m.answer_mode === "grounded_summary"
+                          ? "AI interpreted your needs; the server supplied this fact summary. This is a limited response, not the original AI explanation."
+                          : "Live AI · response checked against published source references. Recommendations still require judgment."}
                       </small>
                     </div>
                   </article>

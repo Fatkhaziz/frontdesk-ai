@@ -51,6 +51,11 @@ def verify(business, destination):
                 diagnostic=(turn['safe_rejection'] or {}).get('rejection',{})
                 print('Safe diagnostic:',{k:diagnostic[k] for k in ('stage','reason','field') if k in diagnostic},'request_id:',turn['request_id'])
                 return False
+            if result.get('answer_mode') == 'grounded_summary':
+                turn['accepted']=False;turn['delivered_with_limits']=True
+                journal['accepted']=False;target.write_text(json.dumps(journal,indent=2));target.chmod(0o600)
+                print('Limited fact summary delivered; full AI acceptance is NOT established. No retry or follow-up sent. Private evidence:',target)
+                return False
             prefs=result['preferences'];history += [{'role':'user','content':question},{'role':'assistant','content':(result['answer']+' '+result.get('follow_up',''))[:1600]}]
             history=history[-8:];turn['accepted']=True
             target.write_text(json.dumps(journal,indent=2));target.chmod(0o600)

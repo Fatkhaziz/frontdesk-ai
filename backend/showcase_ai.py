@@ -98,6 +98,10 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
         if not still_current():
             raise Rejection(stage, 'stale_source')
         application = 'accepted'
+        if result.get('answer_mode') == 'grounded_summary':
+            saved = result['validation_rejection']
+            diagnostic = Rejection(saved['stage'], saved['reason'], saved.get('field'), saved.get('source_id')).diagnostic(sources)
+            application = 'accepted_with_limits'
         return {**result, 'task_id': task, 'request_id': request_id, 'mode': 'live_ai'}
     except Exception as exc:
         if isinstance(exc, Rejection):
@@ -120,4 +124,4 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
             execute(c, 'UPDATE ai_tasks SET model=%s,status=%s,duration_ms=%s,usage=%s,result=%s WHERE id=%s AND business_id=%s',
                     (provider_model or model, provider, elapsed, json.dumps({**usage, 'provider_response_id': provider_id, 'requested_model': model, 'provider_model': provider_model}), json.dumps({'rejection': diagnostic}) if diagnostic else None, task, business))
             execute(c, 'UPDATE assistant_runs SET source_ids=%s,provider_response_id=%s,token_usage=%s,latency_ms=%s,provider_outcome=%s,application_outcome=%s WHERE task_id=%s AND business_id=%s',
-                    (json.dumps(refs if application == 'accepted' else []), provider_id, json.dumps(usage), elapsed, provider, application, task, business))
+                    (json.dumps(refs if application in ('accepted', 'accepted_with_limits') else []), provider_id, json.dumps(usage), elapsed, provider, application, task, business))
