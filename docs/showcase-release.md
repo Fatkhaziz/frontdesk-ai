@@ -1,358 +1,70 @@
-# FrontDesk AI current showcase and acceptance guide
+# FrontDesk AI live walkthrough and code reference
 
-Current as of November 26, 2026. Workspace 2 and validation version 7 citation/delivery update: [update notes](workspace-2-update.md). This replaces historical capped-attempt handoffs.
+The fall demonstration uses the dealership workspace. The buyer compares published vehicles and talks to Grok in the storefront. The owner prepares answers before they are published. Keep these notes beside the browser.
 
-FrontDesk AI Practice, Showcase and Technical Evidence Guide
+## Open the live website
 
-CIS 457 Senior Design I | November 26, 2026
+1. In GitHub Desktop, open the configured `frontdesk-ai` repository, select `main`, and fetch and pull.
+2. In the Terminal tab running the previous server, press Control+C. Run these lines in the same tab:
 
-Fatkhaziz Mukhamedov, Al Baraa Khaled, Mohammad Abdullah, Amar Al Balkhi
+   ```bash
+   cd "$HOME/Desktop/Gannon/7th semester/Senior Design/frontdesk-ai"
+   bash scripts/launch-showcase.sh
+   ```
 
-Use this guide to practice the website and explain the actual code, database and provider request. It is separate from the report submitted to faculty. Current code and evidence baseline: November 26, 2026.
+3. Leave Terminal open. Open [the dashboard](http://127.0.0.1:8000/) and sign in. Click **Open customer site** to open the buyer's tab. Keep the owner tab open for knowledge and inquiries.
+4. Before sharing your screen, sign in to Supabase and open the [repository](https://github.com/Fatkhaziz/frontdesk-ai) in a third tab. The only AI calls in the walkthrough below are the actions you click. The standard launch builds and serves the website without calling Grok. In **Request log → Service and usage details** you can check the practice allowance.
 
-## 1 Start the updated website — one launch command
+## 1. Start with the owner
 
-First, use GitHub Desktop to fetch origin and pull main after the release PR is merged. Keep your existing configured frontdesk-ai checkout. Do not clone a second copy or copy private credentials into this document. The existing Mac folder is Desktop/Gannon/7th semester/Senior Design/frontdesk-ai.
+**Do.** Click **Owner knowledge → Suggest customer questions with AI**. Wait for the questions to appear. Pick one you can answer from information you have. For a question about accident history or warranty terms that you can't verify, click **Staff must answer**. For a question you can substantiate, fill **Owner-provided answer** and **Source or reference (optional)** and click **Approve this answer**. Click **Save private knowledge**, tick the review checkbox and click **Publish reviewed knowledge**. Open **See published answers** and expand the question to see the result.
 
-Open the Terminal tab that is currently running the website. Click inside it and press Control and C together once to stop that server. This is Control, not Command. Wait until the prompt ending with % or $ returns. Leave the Codex conversation tab alone.
+**Say.** “Grok looks at this dealership's published inventory and the questions we've already covered. It suggests what buyers might ask. I decide what's accurate enough to publish and where a person needs to answer. Customers see the published FAQ and the assistant can use those same answers.”
 
-Paste these two lines into that same Terminal, then press Return:
+**Point.** [KnowledgeSetup.tsx](../frontend/src/KnowledgeSetup.tsx) calls `POST /api/dealer/knowledge/suggest`. The `suggest` function in [shopping.py](../backend/shopping.py) authenticates the owner, builds context from the business's published records and calls `run_ai`. Suggestions return to the form as drafts. `PUT /api/dealer/knowledge` saves `public.dealer_knowledge.cards` and advances the private revision. `POST /api/dealer/knowledge/publish` copies the reviewed public fields into `published`, records `published_revision` and adds a row to `public.knowledge_events`. The public shop reads that snapshot. A staff referral exposes the question and referral without the private answer.
 
-cd "$HOME/Desktop/Gannon/7th semester/Senior Design/frontdesk-ai"
-bash scripts/launch-showcase.sh
+## 2. Compare actual inventory records
 
-The script loads the existing private configuration, checks Auth/database connectivity, applies pending migration 006, preserves existing records and usage, builds the website and starts the app. It makes no AI inference during launch. Keep this Terminal open. If it reports a migration/configuration error, stop there and retain the safe error category; do not paste credentials into chat or reset the database.
+**Do.** In the customer tab, click **Inventory**. Check **Compare this vehicle** on **Compact Hatch** and **City Hybrid**. Click **Compare selected (2)**. Point to their asking prices, mileage, seats, documented MPG, cargo and the price difference. These two entries are labeled fictional examples.
 
-Open Safari. First open http://127.0.0.1:8000/health and check `showcase_validation_version: 7`. This read-only check needs no login and sends no AI inference. Then open http://127.0.0.1:8000/ and sign in privately with the existing owner email/password. Click System status and Refresh status. Check Auth ready, PostgreSQL connected, validation version 7 in Technical API diagnostics, and the practice-budget panel. The historical attempt count should remain at its real value; it must not reset to zero.
+**Say.** “The comparison comes from the latest published version of each selected car. The server subtracts the listed prices in cents. The Compact Hatch is cheaper and has more published cargo space. The City Hybrid has higher published combined MPG. A missing specification stays blank as ‘Not provided.’”
 
-The attempt guard is now 200; it is not 200 free calls. A shared conservative ledger caps preparation at $1.00 of the owner-declared $4.97 allowance and preserves at least $3.50 while preparation mode is active. Failed attempts remain reserved. The provider’s actual remaining credit must be checked separately at https://console.x.ai/. No top-up, purchase or automatic retry is enabled by this launcher.
+**Point.** [PublicShop.tsx](../frontend/src/PublicShop.tsx) sends the selected IDs and buyer preferences to `POST /api/shop/{business_id}/compare`. In [shopping.py](../backend/shopping.py), `catalog` reads `public.listings.published` and `published_revision` for that business. `comparison_result` computes the difference and `assessments` checks the buyer's needs against the facts. Open the resulting comparison next to those two records in Supabase. The compare action uses database facts and arithmetic.
 
-## 2 Open Showcase on the owner dashboard
+## 3. Have a live conversation
 
-Click **Showcase** in the left sidebar of the signed-in owner dashboard. **Open inventory to compare** opens the customer's inventory. **Open Find my fit** opens the AI chat directly. **Open Owner knowledge** opens question suggestions and approval in the owner dashboard. **See published answers** opens the customer FAQ, including source notes the owner approved and questions routed to staff.
+Stay in the **same customer tab** so it keeps both selected cars. Click **AI chat**. Type a message in **Your message** and click **Send to AI**.
 
-**Saved Grok responses** on Showcase shows the latest Terminal check already saved on this Mac. This view matches each turn to the business's saved request record and displays delivered answers, extracted budget and seats, source evidence and request IDs. A stopped check shows its recorded outcome. The page reads existing records without spending AI credit. Customer chat displays replies to its own messages. To keep those replies after closing the tab, use **Save conversation**.
+- **First turn.** “My vehicle-price budget is $25,000. I need five seats for commuting and prefer fuel economy. Which of these two cars fits better, and what would you ask me next?”
+- **Follow-up.** Answer the assistant's actual question. Then try “Raise my vehicle-price budget to $30,000 and retain five seats. What changes?” Show the updated budget under **Your preferences**.
+- **If asked about a fair price.** “Is the City Hybrid a fair price? What would you need to know before deciding?” Show the listed price, the comparison and any missing condition, fee or market evidence the assistant explains. This dealership's inventory alone cannot establish market value.
 
-The previously configured customer URL was http://127.0.0.1:8000/shop/demo-dealer. The navigation on Showcase uses the ID of the signed-in business. Compact Hatch and City Hybrid are fictional showcase examples.
+Read the actual reply and open **Sources used** on that message. In practice, you can also ask about carrying a stroller, a mileage cap for a long commute, or which published listings confirm AWD for winter driving. Those are customer prompts to type during the chat.
 
-## 3 Perform the real AI acceptance check before class
+**Say.** “I gave it a budget and daily use in normal language. Grok writes the reply and suggests a follow-up. We check that the preferences came from what I said, and we insert the exact quantities from the published records. The next turn carries the previous preferences and recent dialogue.”
 
-Version 7 asks the model to insert approved values through short source references; the server supplies the exact listing quantities. Known inline/grouped/policy citations resolve against the published snapshot. Normal accepted output is labeled an AI explanation. If numeric wording or inline citations cannot be verified but the structured needs, declared sources and recommendations passed checks, ALL model prose is discarded and a confirmed listing summary is displayed. Its evidence is `accepted_with_limits`, retaining the original safe rejection category and canonical source IDs. This is useful limited delivery, not proof that the model explanation passed. Invalid preferences, foreign declared references, stale publications and provider failures remain blocked. No second paid request is made automatically.
+**Point.** The `ask` function in [PublicShop.tsx](../frontend/src/PublicShop.tsx) sends each message to `POST /api/shop/{business_id}/assist`, along with the selected IDs, current preferences and recent turns. The `assist` route in [shopping.py](../backend/shopping.py) builds a published source list for that business. The server sends those approved facts and the message in a single request through `provider_call` in [showcase_ai.py](../backend/showcase_ai.py). Point to `client.post` for the HTTPS call to [xAI Chat Completions](https://docs.x.ai/developers/rest-api-reference/inference/chat-completions). The model and API key come from the server's environment. Keep the key off screen.
 
-Optional automated real check: launch with `bash scripts/launch-showcase.sh --practice --verify-live` if you need a new capture. This sends up to three synthetic shopping requests (needs, budget change and fair price) to the real provider, stops at the first rejection or limited answer, and saves the results under Desktop/FrontDesk-AI-Live-Acceptance. The default launch uses no AI credit. If a check already ran, read **Saved Grok responses** first. The steps below are available for deliberate practice from the browser.
+**Explain the return path.** [shopping_delivery.py](../backend/shopping_delivery.py) resolves the model's source IDs against the published snapshot and inserts exact values. It checks independently sourced paragraphs and can omit an unverifiable paragraph while showing the rest of Grok's live reply. The backend checks recommendations and hard limits and verifies that the publication stayed current. The same response includes the updated comparison. The customer tab displays the reply, sources, follow-up and new preferences.
 
-## Owner questions — one paid request
+## 4. Hand the question to staff
 
-Do: Owner tab → Owner knowledge → Suggest customer questions with AI. Click once and wait. Review whether the suggestions concern the published business/inventory. Save private knowledge if useful. Do not publish an invented answer.
+**Do.** Under the chat, click **Ask staff to follow up**. Enter “Please confirm the maintenance history for these two example cars” and a test contact such as `practice@example.invalid`. Agree to send the details, then click **Send inquiry to staff**. Switch to the owner tab, click **Inquiries → Refresh inquiries**, open the request context and change the status to **Pending**.
 
-Check: A real response is visible; System status records knowledge_suggestions with provider succeeded and application accepted.
+**Say.** “This action gives staff the selected vehicles, the buyer's preferences and the request. We ask for consent before saving contact details.”
 
-## Compare — no AI charge
+**Point.** `submit_followup` in [shopping.py](../backend/shopping.py) handles `POST /api/shop/{business_id}/inquiries` and saves the request to `public.shopping_inquiries`. The owner inbox uses `GET /api/inquiries`. The status control sends `PATCH /api/shopping/inquiries/{iid}`; the server scopes the update to the signed-in business. The contact comes from this separate form and stays in the staff workflow.
 
-Do: Customer tab → Inventory. Tick Compare this vehicle for Compact Hatch and City Hybrid. Click Compare selected. Read the listed prices, seats, MPG and missing values.
+## When faculty want to see the request or password storage
 
-Check: The table shows the same selected published vehicles and exact price difference. Private edits do not appear.
+**Trace the request you just made.** Open the small **Request log** link below the owner workspace and click **Refresh requests**. Find the most recent `shopping_assistant` or `knowledge_suggestions` row. Point to the request ID, task ID, provider response ID, model, latency and token usage. `provider_outcome` records the call to xAI. `application_outcome` records whether the application delivered a verified reply. `accepted_with_limits` means some wording was omitted. You can match the request ID to the `X-Request-ID` header of the POST in the browser's Network tab.
 
-## Natural needs — one paid request
+In Supabase SQL Editor, run the first query from [evidence-queries.sql](evidence-queries.sql). Match the request ID with `public.assistant_runs.request_id`. The query joins the cited source IDs and provider outcome to `public.ai_tasks` through `task_id` and `business_id`. For an exact match, add `WHERE r.request_id = 'PASTE THE REQUEST ID'` before `ORDER BY`. The source snapshot is in `assistant_runs.source_snapshot`. `public.ai_budget` tracks attempts. `public.ai_spend_reservations` records the conservative budget reserved by [spending.py](../backend/spending.py). The regular conversation stays in browser memory between turns and its recent messages travel to Grok for context. Supabase stores request metadata and the separately submitted inquiries.
 
-Do: Click Find my fit. In Your message enter: “My vehicle-price budget is $25,000. I need five seats for commuting and prefer fuel economy. Compare my selected vehicles, explain missing information and ask one useful follow-up.” Click Send to AI once.
+**Point to password storage.** In Supabase SQL Editor, run query 3 from [evidence-queries.sql](evidence-queries.sql). It shows whether the `encrypted_password` column of `auth.users` contains a hash. Supabase Auth uses bcrypt. In **Authentication → Users**, show the corresponding user ID. Then show `public.memberships`, which associates the authenticated user's ID with a business and role. [main.tsx](../frontend/src/main.tsx) signs in through Supabase Auth. In [main.py](../backend/main.py), `identity` validates the token with Supabase before reading that membership. Owner-only endpoints additionally use `owner`. [Supabase password documentation](https://supabase.com/docs/guides/auth/password-security)
 
-Check: A response is accepted. The visible budget is 25000 and minimum seats is 5. The answer cites relevant published sources and does not silently relax hard requirements.
+**Where it runs.** React runs in Safari. The demonstration's FastAPI process runs on the Mac at `127.0.0.1:8000`. Supabase runs the managed PostgreSQL database and Auth. Grok runs at xAI. The final deployment plan puts the application server on a hosted HTTPS service.
 
-## Follow-up — one paid request
+## Practice boundary
 
-Do: Answer the actual follow-up and add: “Raise my vehicle-price budget to $30,000 and retain five seats. Which selected option fits my priorities better now?” Click Send to AI once.
-
-Check: The budget becomes 30000, the seat requirement remains 5, and the answer concerns the selected vehicles. Earlier accepted context is preserved.
-
-## Fair-price question — one paid request
-
-Do: Enter: “Is this a fair price? Explain what you can verify and what information you would still need.” Click Send to AI once.
-
-Check: It discusses supported asking-price/specification/budget trade-offs and explains missing market/condition/fee evidence; it does not invent a verified appraisal.
-
-## Save actual conversation — no AI charge
-
-Do: Click Save conversation in the chat tools. Keep the downloaded JSON with your private rehearsal evidence.
-
-Check: The file contains the accepted messages, source details and IDs from this tab. It is an actual export, not a reconstruction of earlier lost text.
-
-## Verify durable evidence — no AI charge
-
-Do: Owner tab → System status → Refresh status → Latest showcase AI requests. Expand Published source evidence for each new run.
-
-Check: Match the operation/time and request/task/provider IDs. Provider succeeded and application accepted must both be present for a successful answer.
-
-These are four deliberate preparation requests, with no automatic retries. The application reserves a conservative ceiling before each. The actual response text may vary, so inspect outcomes rather than expecting a memorized sentence. If a request fails, capture the request ID and saved rejection stage/reason from System status. Do not keep pressing Send or label a provider completion as a working conversation. The latest code was automatically tested here; these live checks still need the configured Mac.
-
-## 4 Practice every implemented feature
-
-| Feature | Practice action and expected behavior | Cost / caution |
-
-| --- | --- | --- |
-
-| Sign-in and access | Sign in with owner; confirm dashboard loads. Sign out; protected actions must require sign-in. A staff account, if one is configured, must not publish or view owner-only diagnostics. | No paid call |
-
-| Find saved listings | Listings → Find a vehicle; search make/model/year. Use Show to filter Published or Private drafts. Clear the search to restore the list. | No paid call |
-
-| Create a throwaway listing | + New listing → enter clearly fictional facts, year, price in dollars and mileage. Save vehicle details. Fill a description manually and Save description. | No paid call unless Generate with Grok is chosen |
-
-| Optional AI description | Use Generate with Grok only when you deliberately want to verify that legacy feature; inspect/edit the wording before saving. | One additional paid request |
-
-| Publish and private isolation | Open Review and publish, read the saved revision, tick the approval checkbox and Publish approved revision. View public page. Change the private price and save; reload public page and verify the approved price remains. | No paid call |
-
-| Unpublish / delete | For the throwaway listing, expand Listing management. Unpublish hides it publicly. Delete listing opens a confirmation. Delete only the throwaway record you created for this test. | No paid call; deletion is permanent after confirmation |
-
-| Owner knowledge | Add a question manually; enter a true answer/source note or route to staff. Save private knowledge; confirm public knowledge unchanged until owner publication. | Manual editing is free; Suggest customer questions with AI is paid |
-
-| Customer comparison | Select two and then three published vehicles. Compare selected. Check missing values and units. Remove one or Clear selection. | No paid call |
-
-| Requirements and AI explanation | Adjust vehicle-price versus total-cost budget; ask natural needs/follow-up; inspect sources. Explain this comparison with AI is another explicit paid action. | One request per send/explanation |
-
-| Consented staff inquiry | Ask staff to follow up → review summary → synthetic contact class-test@example.invalid → consent → Send inquiry to staff. In owner Inquiries, refresh, expand context and set Pending; refresh again. | No paid call; status persists |
-
-| Business settings | Inspect the existing private/public profile and service intake. Save only truthful intended changes. Other-domain templates are supporting fixtures, not claims of live salon/studio onboarding. | No paid call |
-
-| Status and export | Refresh status, expand request sources/diagnostics and run read-only evidence SQL. Save actual conversation before closing/refreshing its tab. | No paid call |
-
-## 5 What to show when they ask technical questions
-
-| Question | Exactly where to open | What to explain |
-
-| --- | --- | --- |
-
-| Where is the latest Grok call? | Owner System status → Latest showcase AI requests; Supabase public.assistant_runs joined to public.ai_tasks. | A completion is not an inquiry. Match time, request_id, task_id and provider_response_id, plus tokens/latency and both outcomes. |
-
-| Show me the API call in code | GitHub → backend/showcase_ai.py → provider_call. | Point to client.post and https://api.x.ai/v1/chat/completions. The key comes from server environment; do not show its value. |
-
-| What happens before/after the call? | backend/shopping.py → assist / validate_answer; backend/showcase_ai.py → run_ai. | Before: resolve published context and reserve usage. After: validate schema, explicit constraints, citations, numeric claims and current publication; then display or reject. |
-
-| Where is the password in the database? | Supabase SQL Editor → run Password evidence in the supplied SQL file. Database schema auth → users → encrypted_password. | The column holds a salted bcrypt hash for password accounts. Authentication → Users shows accounts. memberships holds authorization, not passwords. |
-
-| Where is business data stored? | Supabase Table Editor → public → listings, business_profiles, dealer_knowledge and the inquiry tables. | Data is in the managed project’s PostgreSQL service; the Mac hosts application code for this demo. Confirm the project’s configured region in its infrastructure/settings; do not guess its physical location. |
-
-| Why is ai_interaction_evidence empty? | Check the actual route. New shopping/owner-question runs use assistant_runs. | The earlier business-profile Q&A route uses ai_interaction_evidence. Empty rows are not proof that the newer route did or did not run. |
-
-| Is it using RLS/MFA? | migrations/001–006; backend/main.py identity and owner. | Current browser table grants are revoked and backend scopes SQL. RLS policies, enforced privileged MFA and production least-privilege credentials remain planned hardening. |
-
-| Is this local AI or an agent? | Architecture diagram and actual HTTPS call. | The application server is local now; managed Auth/data and Grok are remote. Agent behavior concerns authorized actions/autonomy, not whether a model is local. This model cannot autonomously write records. |
-
-| What happens if Grok is unavailable? | Show factual comparison and a recorded failed outcome. | No fabricated response or automatic paid retry. The customer can compare known facts or explicitly contact staff. A mock rehearsal must be labeled. |
-
-| Does it send staff an email? | Inquiries and source code, not a provider notification dashboard. | The current workflow persists staff work. A delivered email/SMS is a different integration and is not yet claimed. |
-
-## 6 The short website script you can read aloud
-
-## Owner knowledge
-
-“AI helps the owner prepare for questions they may not have thought of. The owner supplies the true answers and decides what is approved.”
-
-## Comparison
-
-“These are the published facts for the selected vehicles. The server calculates the price difference. Missing information stays missing.”
-
-## Personalization
-
-“The customer can describe a budget, passenger needs and driving routine naturally. Grok interprets that request and explains the trade-offs. Our backend checks the requirements and sources.”
-
-## Follow-up
-
-“I can change the budget without starting over. The accepted requirements update, and the answer still concerns these selected vehicles.”
-
-## Unknowns
-
-“For a fair-price question, it can explain known asking prices and features. A verified market valuation still needs condition and comparable-sale evidence.”
-
-## Handoff
-
-“If a person is needed, the customer approves a separate staff request. It includes the selected vehicles and requirements. Chatting alone does not create a lead.”
-
-## Proof
-
-“Here is the actual request: our HTTP ID, task ID, provider response ID, time, tokens and source revision. Provider completion and application acceptance are separate.”
-
-## 7 Full team presentation timing and notes
-
-The deck has 20 main slides timed to 20 minutes, plus four backup slides for the five-minute Q&A. Suggested speaking assignments are preparation assignments, not retroactive implementation credit. Each member should review and understand their material before presenting. Export an actual PPTX copy from the presentation’s menu for Blackboard; the assignment explicitly rejects submitting only a link.
-
-| Slide | Title | Suggested speaker | Time |
-
-| --- | --- | --- | --- |
-
-| 1 | FrontDesk AI — Fall Release 1 | Fatkhaziz | 0:30 |
-
-| 2 | The problem is incomplete information and intake | Amar | 0:45 |
-
-| 3 | Requirements come from identifiable sources | Al Baraa | 0:45 |
-
-| 4 | Fall scope and final scope are different | Amar | 0:45 |
-
-| 5 | The fall acceptance goals are specific | Amar | 0:45 |
-
-| 6 | The architecture separates interface, authority and inference | Al Baraa | 1:30 |
-
-| 7 | A private edit is not a public change | Al Baraa | 0:45 |
-
-| 8 | Website: prepare the owner’s knowledge | Fatkhaziz | 1:00 |
-
-| 9 | Website: understand needs, compare and refine | Fatkhaziz | 3:30 |
-
-| 10 | Website: staff receive an explicit request | Fatkhaziz | 0:45 |
-
-| 11 | Show the actual server-side API call | Al Baraa | 1:00 |
-
-| 12 | Trace one request through three identifiers | Mohammad | 1:15 |
-
-| 13 | Show the password location, without exposing a hash | Mohammad | 1:00 |
-
-| 14 | Security controls have clear limits | Mohammad | 1:00 |
-
-| 15 | Verification separates code from real service behavior | Amar | 0:45 |
-
-| 16 | Current status and release gate | Fatkhaziz | 0:45 |
-
-| 17 | Completion plan preserves the full faculty scope | Al Baraa | 1:15 |
-
-| 18 | Responsibilities must produce reviewable artifacts | Fatkhaziz | 0:45 |
-
-| 19 | AI assistance does not transfer responsibility | Mohammad | 0:45 |
-
-| 20 | What this release demonstrates | Fatkhaziz | 0:30 |
-
-| Total | Main presentation |  | 20:00 |
-
-| Q&A | Four backup slides | All members | 5:00 |
-
-## 1. FrontDesk AI — Fall Release 1
-
-Our fall release connects owner preparation, approved business information, vehicle comparison and an AI shopping conversation. I will show the website, while the team explains the design and evidence. The final system remains a small-business platform; this milestone uses a dealership to demonstrate a concrete AI workflow. The report is dated November 26 and distinguishes implemented code, real-provider evidence and spring work.
-
-## 2. The problem is incomplete information and intake
-
-The owner’s problem is repeated intake, not simply a missing chatbot. The customer may describe a commute, passenger needs and a budget rather than ask for a specific specification. Staff then need the unresolved question and those requirements together. Our early empathy map identified missed inquiries, after-hours gaps and workload. These are design findings and hypotheses; we have not measured a revenue increase or a percentage reduction in missed calls. Present this as a review of the problem, not a claim that I implemented the application.
-
-## 3. Requirements come from identifiable sources
-
-Our earlier requirements record identifies Anwar El Daour at Universal Motors Group and records an October 4 interview conducted by me. It describes missed calls, repeated service and sales questions, paper scheduling and cost concerns. The professors’ annotated requirements require multiple business domains and more complete operations in the final system. The later discussion with Dr. Matovu focuses this fall release on a dealership and a more useful AI feature. Salon and studio examples are evaluation scenarios, not additional interviewed businesses.
-
-## 4. Fall scope and final scope are different
-
-The 20 percent milestone is a working vertical slice, not a claim that 20 percent of code lines or tests are complete. The fall workflow is deep enough to show a real business-information lifecycle and a customer decision process. The full requirements retain the additional domains, roles, bookings and dealership operations requested by faculty. We identify these as planned work instead of describing every requirement as already implemented.
-
-## 5. The fall acceptance goals are specific
-
-The updated specification adds stable IDs for the owner question workflow and personalized shopping. Acceptance is observable: a private answer must remain private until approval, selected vehicles must be the ones sent in the request, a changed budget must update accepted preferences, and the resulting task must be inspectable. We also test unknown facts and safe failures. These checks give us a clear definition of success beyond a visually convincing answer.
-
-## 6. The architecture separates interface, authority and inference
-
-The browser runs React and TypeScript. FastAPI handles authority, validation and application rules. Supabase Auth verifies identities; managed PostgreSQL stores application data. The FastAPI server sends paid requests to xAI using a private server key. Grok runs remotely, even though the demo’s application server currently runs on a Mac. A future hosted service replaces that Mac; users do not need a local language model. The backend remains responsible for publication, permissions, arithmetic and all database writes. The planned worker is for durable notifications, retention and synchronization. It is not currently a running completed feature. The implementation uses direct Psycopg SQL and versioned SQL files; earlier ORM/Alembic proposals are not the current code.
-
-## 7. A private edit is not a public change
-
-For example, if a published price is $23,500 and we save a private change to $24,500, customers still receive the approved $23,500 until republication. The approval request includes the expected saved revision, so a concurrent edit requires fresh review. The same principle applies to owner knowledge. An AI suggestion cannot approve or publish itself. This is one concrete place where business authority stays with a person.
-
-## 8. Website: prepare the owner’s knowledge
-
-Switch to the owner tab. Click Owner knowledge. During rehearsal, generate once and inspect the questions; during class, use the saved result or send one explicit live request if the budget and acceptance check are ready. Explain: AI helps an owner think of questions they may not have anticipated, but it does not invent official answers. Show the private and public revision numbers. Use a verified answer or a staff route; do not publish a fictional policy as a real business commitment. Return to slides only after the next two website steps.
-
-## 9. Website: understand needs, compare and refine
-
-In Listings click Open customer inventory; it opens a second tab. Select the two explicitly fictional vehicles with Compare this vehicle. Click Compare selected to show the table and deterministic price difference; this makes no paid call. Click Find my fit and send the stated request once. Wait, then point to the visible budget and seats. Expand Sources used and identify a published vehicle field/revision. Answer its actual follow-up or explicitly raise the vehicle-price budget to $30,000 while retaining the other needs. Explain that the model interprets the request and writes the explanation; the backend rechecks eligibility and arithmetic. If asked whether a price is fair, ask that as an additional deliberate turn: the assistant can discuss known price/budget/specification trade-offs, but cannot establish market value without comparable sales and condition evidence. Do not promise a particular phrase or a specific best vehicle in advance. Save conversation after an accepted real response. If a request fails, say it was not accepted and show the recorded category; do not present a screenshot of a mock as live success.
-
-## 10. Website: staff receive an explicit request
-
-The contact form is separate from AI chat. Submit only after showing what is being sent and confirming consent. In the owner inbox, refresh and expand the customer requirements and selected vehicles, then set the status to Pending. Explain that the database save and a notification are separate outcomes; this release does not claim an email or SMS was delivered. A normal answered chat does not automatically become a sales lead.
-
-## 11. Show the actual server-side API call
-
-Open backend/showcase_ai.py at provider_call in GitHub. Point to client.post and the exact HTTPS URL. The request includes a configured model, system instructions, a JSON user payload, maximum output tokens and JSON response mode. The Authorization value comes from a private environment variable; do not open or reveal its value. The browser posts to our FastAPI endpoint, not directly to xAI. A JSON response is still untrusted data. After it arrives, we validate shape, source membership, explicit preference changes, hard constraints and allowed numeric facts, then recheck that the published data has not changed.
-
-## 12. Trace one request through three identifiers
-
-In System status click Refresh status and open Latest showcase AI requests. Pick the actual accepted classroom or rehearsal request, not merely a historical successful provider status. In Supabase SQL Editor run the supplied read-only latest-showcase query. Match task_id between ai_tasks.id and assistant_runs.task_id, and match request_id with the browser response header. Provider succeeded means a completion came back; application accepted means our validation passed. A failed application outcome is not a successful conversation. ai_interaction_evidence is for the earlier business-profile Q&A route; inquiries are customer work and do not prove an API call. An empty evidence table may simply be the wrong route or no calls yet.
-
-## 13. Show the password location, without exposing a hash
-
-The user account belongs to Supabase Auth. For password-based users, the encrypted_password column stores a salted bcrypt hash, not a readable password. Memberships maps the verified user subject to a business, role and active state. It is not the password table. In SQL Editor run the supplied query that selects the account ID, whether a hash is present, its format prefix and length. Do not display the full hash. Authentication Users shows accounts, while Auth audit/login evidence is a different question from a paid xAI call. The app validates tokens with managed Auth and separately checks membership for business access. Source: Supabase password-security documentation.
-
-## 14. Security controls have clear limits
-
-Our threat model covers spoofing, tampering, repudiation, disclosure, denial of service and privilege escalation. Current controls include active membership checks, private/public revisions, explicit staff submission and safe correlation metadata. Direct application-table grants to browser API roles are revoked; the current migrations do not enable RLS, so we do not claim they do. Spending reservations protect the declared presentation allowance. Remaining hardening includes enforced privileged MFA, dedicated database privileges, scheduled retention and public-endpoint throttling. These limitations are part of the release plan rather than hidden behind a security label.
-
-## 15. Verification separates code from real service behavior
-
-The automated checks cover application logic and rendered interaction, and the database check uses an actual disposable PostgreSQL instance. They intentionally avoid spending real AI credit. The configured Mac must still verify this latest code against the actual owner account and provider. We should show actual saved request evidence and a real accepted response when calling a feature live verified. The relevant CI run and code revision are linked in the guide. I am presenting the acceptance review, not claiming I authored all of these tests.
-
-## 16. Current status and release gate
-
-This status is the honest November 26 baseline. Earlier real-provider runs prove that the integration reaches Grok, and owner suggestions succeeded, but later customer responses were rejected by application validation. The new fixes pass regressions and CI; we must load them and record accepted real turns before calling that repair live verified. Before presenting, replace this status with the actual outcome and IDs if the live check has passed. Do not replace the status merely because the server started or a test used a mock.
-
-## 17. Completion plan preserves the full faculty scope
-
-The proposed spring sequence starts with platform and business permissions plus resource scheduling. That foundation supports a vehicle and salesperson test drive, a salon stylist and chair, and a studio photographer and room. Then we add dealership operational cases, voice, notifications, retention and sandbox subscriptions. The final release is evaluated across all three domains, with concurrency, accessibility, answer quality and recovery evidence. Exact dates depend on the spring syllabus; the plan uses weeks one to five, six to ten and eleven to fourteen rather than inventing course release dates.
-
-## 18. Responsibilities must produce reviewable artifacts
-
-I led the feasibility demo and most recent implementation/integration. Al Baraa led initial design and worked with me on detailed design. Recent implementation contribution from Amar and Mohammad was limited, so we should not assign them retroactive code credit. The spring plan gives each person a named artifact and acceptance gate. The suggested speaking roles are preparation assignments; each member must review and be able to explain the material they present. Documentation, tests and a short demonstration will establish completion.
-
-## 19. AI assistance does not transfer responsibility
-
-Jim Buchanan’s presentation focused on human accountability when AI produces work. Our owner approval model and request evidence support that responsibility, but they do not remove the need for judgment. We must report failed tests honestly, protect contacts and avoid unverified safety, warranty or market-value claims. The same standard applies to our use of AI coding and drafting tools: we remain responsible for reviewing the code, citing sources and accurately attributing contributions. Sources: supplied Buchanan slides; ACM 2018 and IEEE June 2020 ethics codes.
-
-## 20. What this release demonstrates
-
-This release demonstrates a complete information path: owner preparation and approval, customer needs and comparison, a deliberate staff request and inspectable AI evidence. We distinguish implemented code from live acceptance and final-system plans. We are ready to trace a specific request or record rather than make broad claims about an AI label. We have set aside five minutes for questions.
-
-## 21. Backup: data locations in Supabase
-
-Open the project’s Table Editor and keep public selected for application tables. Switch to auth only to inspect managed identity safely. schema_migrations contains upgrade filenames/checksums, not API calls. ai_budget.calls counts attempts, not dollars; ai_spend tables hold conservative reservations, not the provider’s authoritative wallet.
-
-## 22. Backup: fair-price and unknown-fact questions
-
-Say: We can explain how the listed price and documented features relate to this customer’s needs. We do not have a verified market-comparison or vehicle-condition feed, so we cannot certify that the asking price is fair market value. We would need approved comparable sales, location, condition/history and fees before making that claim. The assistant should make that distinction while still helping with the known trade-offs.
-
-## 23. Backup: local hosting and an AI agent
-
-This implementation is an AI-assisted web application with controlled workflows. The model interprets and explains but cannot autonomously publish, book or write SQL. Calling an agent local-only is not a useful technical definition. The meaningful design question is what actions it can take, with what authority, confirmation and evidence. We can later add tightly authorized workflow tools without moving the model onto a customer device.
-
-## 24. Backup: sources and technical references
-
-Full URLs and access dates are in the report and individual submission. The sources explain external technologies and frameworks. Implementation evidence comes from the repository and actual test/request records, not from a provider’s marketing page. Formal compliance or production readiness is not claimed.
-
-## 8 Presentation-day launch and backup
-
-Before class, verify current provider credit and close unrelated sensitive tabs. Stop the practice server with Control+C. In the configured project folder run bash scripts/launch-showcase.sh --presentation. This explicitly changes the existing ledger’s phase; it does not reset historical attempts, reset reservations or buy credit. Sign in privately and confirm System status. Keep the server Terminal open and prevent the laptop sleeping during the presentation.
-
-Keep the owner tab, customer tab, System status, supplied SQL queries, GitHub provider_call code and the exported slides ready. Open the actual accepted response and its matching evidence before class. Save local screenshots of the real response and evidence without passwords or personal contacts. The downloaded conversation is useful rehearsal backup; it is not substituted for live success.
-
-If the network fails, state the failure plainly, show the factual comparison and previously captured real request evidence, and continue with the architecture. The isolated rehearsal can show interface behavior with synthetic data but must not be represented as a live Grok call. Do not claim a failed or unaccepted request worked.
-
-## 9 Deadlines and remaining submission checks
-
-| When | Action |
-
-| --- | --- |
-
-| November 26–27 | Load the merged code on the configured Mac and complete the four real AI acceptance actions. Record accepted outputs and request IDs. Update the report/slide status only from those results. |
-
-| November 28–December 4 | Practice the complete feature checklist. Al Baraa reviews architecture/elicitation; Amar reviews acceptance cases; Mohammad reviews data/security/API evidence. Keep changes away from working main until reviewed. |
-
-| December 5–10 | Freeze the report/slides, rehearse all four speakers, verify professor collaborator access and update actual December team contributions. |
-
-| December 11 by 11:59 p.m. Eastern | One team member uploads the report and a file copy of the presentation to their respective team dropboxes. Check Blackboard’s submission receipt. |
-
-| December 12 by 11:59 p.m. Eastern | Submit the individual ethics/reflection/assessment file after adding December observations. Do not submit an assessment dated through November 26 as if it covered future work. |
-
-Faculty collaborator requirement: check GitHub repository Settings → Collaborators for tang002@gannon.edu and matovu001@gannon.edu. Invite their actual GitHub accounts and verify acceptance. No collaborator access is claimed merely because the repository is public. The GitHub connector available for this work does not expose an invitation action; account-level completion must be verified in the repository settings.
-
-The attached individual assessment has completed current ratings and the adopted rubric, but it cannot truthfully assess December work before December occurs. The report and slides likewise state the current live gate instead of inventing a passed retest. These are the factual items to update before the deadline; no new design document is needed merely to change a verified status/date.
-
-## References
-
-[1] FrontDesk AI team, source repository and revision history. https://github.com/Fatkhaziz/frontdesk-ai Accessed November 26, 2026.
-
-[7] Supabase, Password security. https://supabase.com/docs/guides/auth/password-security Accessed November 26, 2026.
-
-[8] xAI, Chat Completions API and structured outputs. https://docs.x.ai/developers/model-capabilities/text/structured-outputs Accessed November 26, 2026.
-
-[9] xAI, API pricing, configured non-reasoning model. https://docs.x.ai/developers/pricing Accessed November 26, 2026.
+The owner question generator and each **Send to AI** use one AI request. Opening pages, publishing a reviewed answer, comparing and checking the request log use no inference. The configured practice allowance remains protected. The automated checks use a simulated provider. Verify the real conversation on the configured Mac by sending the first message and then one follow-up from the customer tab. If a turn fails, use that request's reference and owner log to diagnose it before repeating the call.

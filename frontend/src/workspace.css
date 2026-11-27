@@ -97,11 +97,9 @@ main.owner-app { max-width:none; margin:0; padding:0; }
 .stage h3 { margin-bottom:10px; }
 .stage>p { font-size:12px; }
 .saved-summary,.budget-panel { border:1px solid var(--line); background:#fafafd; border-radius:7px; padding:19px; }
-.showcase-features { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(245px,100%),1fr)); gap:14px; }
-.showcase-features article { display:flex; flex-direction:column; align-items:flex-start; }
-.showcase-features article > :last-child { margin-top:auto; }
-.showcase-features h2 { margin-top:0; }
 .saved-reply { white-space:pre-line; overflow-wrap:anywhere; }
+.owner-utilities { margin-top:24px; padding:0; }
+.text-button { background:transparent; border-color:transparent; color:var(--accent); }
 .budget-panel { border-left:3px solid var(--accent); margin:22px 0; }
 .status-grid article { border-color:var(--line); background:#fafafd; padding:18px; }
 .status-grid article p { color:#858896; font-size:12px; }
@@ -114,18 +112,9 @@ main.owner-app { max-width:none; margin:0; padding:0; }
 
 /* Customer inventory */
 .public-app>header { border:0; }
-.shop-hero { border-radius:16px; background:#242434; color:white; padding:38px 42px; margin:15px 0 28px; display:flex; align-items:center; gap:30px; position:relative; overflow:hidden; }
-.shop-hero .eyebrow { color:#a9a5c1; font-size:10px; }
-.shop-hero h1 { color:white; font-size:clamp(33px,4vw,49px); line-height:1.12; letter-spacing:-1.8px; max-width:660px; margin:0 0 18px; }
-.shop-hero h1 span { color:#bab3ff; }
-.shop-hero .lead { color:#b2b1c5; font-size:14px; max-width:530px; margin-bottom:22px; }
-.hero-cta { display:inline-flex; align-items:center; gap:20px; background:#e5e0ff; color:#38304f; border:0; font-size:12px; padding:12px 18px; }
-.hero-cta:hover { background:#f3f0ff; color:#38304f; }
-.hero-cta .ui-icon { width:17px; }
-.hero-stamp { color:white; text-align:left; min-width:184px; margin-left:auto; background:#ffffff05; border:1px solid #4b485f; border-radius:10px; padding:23px; }
-.hero-stamp strong { color:white; font-size:49px; font-weight:450; line-height:1.1; }
-.hero-stamp>span { color:#d4d0e3; font-size:12px; margin:7px 0 19px; }
-.hero-stamp small { color:#8e8caa; font-size:10px; line-height:1.6; }
+.shop-heading { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:7px 0 21px; }
+.shop-heading h1 { font-size:clamp(26px,3vw,39px); line-height:1.15; margin:0; }
+.shop-heading button { flex-shrink:0; }
 .shop-nav { position:static; background:transparent; display:flex; gap:4px; padding:0 0 13px; margin-bottom:18px; border-color:var(--line); }
 .shop-nav button { border-radius:6px; font-size:12px; padding:11px 20px; }
 .shop-nav button.active { background:#eae7fb; color:#554bb8; border-color:#eae7fb; }
@@ -140,7 +129,7 @@ main.owner-app { max-width:none; margin:0; padding:0; }
 .preference-summary { padding:0; }
 .preference-summary .eyebrow { display:inline; margin:0 16px 0 0; font-size:9px; }
 .preference-summary strong { color:#555268; font-size:13px; font-weight:550; }
-.preference-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0 20px; margin-top:18px; padding-top:15px; border-top:1px solid var(--line); }
+.preference-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0 20px; margin:18px 0 0; padding:15px 0 0; min-width:0; border:0; border-top:1px solid var(--line); }
 .preference-fields>p,.preference-fields>fieldset { grid-column:1/-1; }
 .preference-fields>button { align-self:center; }
 .preference-fields .priorities { display:flex; gap:15px; flex-wrap:wrap; align-items:center; }
@@ -172,22 +161,21 @@ main.owner-app { max-width:none; margin:0; padding:0; }
 .fit-layout .preference-summary strong { font-size:18px; line-height:1.3; }
 .fit-layout .preference-fields .priorities { display:block; }
 .fit-layout .preference-fields .priorities legend { float:none; }
-.shop[data-view="Find my fit"] .shop-hero { padding:23px 30px; }
-.shop[data-view="Find my fit"] .shop-hero h1 { font-size:31px; margin-bottom:7px; }
-.shop[data-view="Find my fit"] .shop-hero .lead { margin:0; max-width:none; font-size:12px; }
-.shop[data-view="Find my fit"] .hero-stamp,.shop[data-view="Find my fit"] .hero-cta { display:none; }
-.shopping-chat { border:1px solid var(--line); border-top:3px solid var(--accent); padding:25px; border-radius:10px; }
+.shopping-chat { background:white; border:1px solid var(--line); padding:25px; border-radius:12px; }
 .shopping-chat .section-heading { margin-top:0; }
 .shopping-chat .section-heading h2 { margin-bottom:0; font-size:24px; }
 .shopping-chat .eyebrow { font-size:9px; }
 .shopping-chat>p { font-size:12px; color:#777788; }
 .shopping-chat .badge { color:#6d66ab; background:#eeebfc; }
-.shopping-chat textarea { min-height:90px; font-size:13px; }
+.shopping-chat textarea { min-height:64px; font-size:14px; }
 .shopping-conversation { max-height:440px; padding:5px 4px 5px 0; }
 .bubble.assistant { background:#f3f2f9; color:#4f4c65; border-radius:9px 9px 9px 2px; }
 .bubble.customer { background:#eae6fb; color:#514675; border-radius:9px 9px 2px 9px; margin-left:30px; }
 .bubble strong { font-size:9px; letter-spacing:.6px; }
-.bubble p { font-size:13px; }
+.bubble p { font-size:14px; }
+.chat-reply { white-space:pre-line; overflow-wrap:anywhere; }
+.chat-intro { color:var(--muted); padding:16px 0 26px; }
+.chat-error { background:#fff1ef; color:#7c352e; overflow-wrap:anywhere; }
 .bubble small { color:#9490a5; }
 .starter-prompts button { border-color:#e3deef; color:#70638e; font-size:11px; background:#fcfaff; }
 .chat-tools { border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:14px; }
@@ -282,7 +270,7 @@ main.owner-app { max-width:none; margin:0; padding:0; }
   .shop-nav { flex-wrap:nowrap; gap:4px; padding-bottom:12px; }
   .shop-nav button { font-size:11px; padding:10px 8px; flex:1; white-space:nowrap; }
   .selection-tray { flex-direction:column; align-items:stretch; padding:12px; font-size:10px; }
-  .selection-tray .actions { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; }
+  .selection-tray .actions { display:flex; flex-wrap:wrap; gap:5px; }
   .selection-tray button { padding:8px 5px; font-size:10px; }
   .preference-panel { padding:15px; margin-bottom:20px; }
   .preference-summary .eyebrow { font-size:8px; margin-right:8px; }

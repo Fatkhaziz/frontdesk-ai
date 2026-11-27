@@ -53,17 +53,10 @@ export default function KnowledgeSetup({
     <section className="knowledge">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Prepare your receptionist</p>
           <h1>Owner knowledge</h1>
-          <p className="muted">
-            AI suggests what customers may ask. You supply the answers and
-            decide what goes public.
-          </p>
+          <p className="muted">Write the answers customers can find on your site.</p>
         </div>
         <div className="actions">
-          <a className="button" href={"/shop/" + businessId} target="_blank" rel="noreferrer">
-            Open customer inventory ↗
-          </a>
           <a className="button" href={"/shop/" + businessId + "?view=questions"} target="_blank" rel="noreferrer">
             See published answers ↗
           </a>
@@ -74,11 +67,6 @@ export default function KnowledgeSetup({
           {error}
         </p>
       )}
-      <ol className="workflow-strip">
-        <li>Generate useful questions</li>
-        <li>Answer or route to staff</li>
-        <li>Review and publish</li>
-      </ol>
       <div className="actions">
         <button
           className="primary"
@@ -91,11 +79,14 @@ export default function KnowledgeSetup({
               const existing = new Set(
                 cards.map((c) => c.question.toLowerCase().trim()),
               );
-              const next = result.questions
-                .filter(
-                  (q: any) => !existing.has(q.question.toLowerCase().trim()),
-                )
-                .map((q: any) => ({
+              const next = (result.questions as { question: string; reason: string }[])
+                .filter((q) => {
+                  const question = q.question.toLowerCase().trim();
+                  if (existing.has(question)) return false;
+                  existing.add(question);
+                  return true;
+                })
+                .map((q) => ({
                   id: crypto.randomUUID(),
                   question: q.question,
                   answer: "",
@@ -106,7 +97,7 @@ export default function KnowledgeSetup({
               setCards((cs) => [...cs, ...next].slice(0, 30));
               setApproved(false);
               notify(
-                "AI question suggestions are private and unsaved. Review, answer and save them.",
+                next.length ? "Review the suggested questions below." : "No new questions were suggested.",
               );
             })
           }
@@ -133,10 +124,7 @@ export default function KnowledgeSetup({
           + Add a question
         </button>
       </div>
-      <p className="muted">
-        Suggestions use one paid request. Save edits before generating more. No
-        AI-generated answer or policy is published automatically.
-      </p>
+      {dirty && <p className="muted">Save your changes before requesting more suggestions.</p>}
       {saved && (
         <p className="revision-note">
           Private revision {saved.revision} · Published revision{" "}
@@ -145,11 +133,7 @@ export default function KnowledgeSetup({
       )}
       {!cards.length && (
         <div className="empty">
-          <h3>What will customers want to know?</h3>
-          <p>
-            Generate suggestions or add your own question. Missing policies
-            should be marked for staff.
-          </p>
+          <p>Ask AI for suggestions or add a question yourself.</p>
         </div>
       )}
       <div className="knowledge-cards">

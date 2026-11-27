@@ -23,7 +23,7 @@ async function submit(form){await act(async()=>form.dispatchEvent(new Event('sub
 test('inventory and navigation never make an automatic paid request',async()=>{
  const calls=[];const api=async(path,method,body)=>{calls.push({path,method,body});return inventory;};
  await act(async()=>root.render(h(PublicShop,{key:'inventory',id:'a',api,config})));
- await click(button('Find my fit'));await click(button('I have $25,000 and commute every day. What should I consider?'));
+ await click(button('AI chat'));await fill(field('Your message'),'I have $25,000 and commute every day.');
  assert.equal(calls.length,1);assert.equal(field('Your message').value.includes('$25,000'),true);
  assert.equal(document.querySelectorAll('.inventory-card').length,0);
  await click(button('Inventory'));assert.equal(document.querySelectorAll('.inventory-card').length,2);
@@ -46,19 +46,22 @@ test('system status shows bounded rejection diagnostics and honestly marks older
 test('multi-turn AI preferences persist and send is explicit',async()=>{
  const calls=[];const api=async(path,method,body)=>{calls.push({path,method,body});if(!method)return inventory;return {preferences:{...prefs,budget_cents:2500000,budget_kind:'vehicle'},answer:'Compare the available choices.',follow_up:'How many passengers?',recommended_ids:[],matches:['a'],sources:[],mode:'live_ai'};};
  await act(async()=>root.render(h(PublicShop,{key:'chat',id:'a',api,config})));
- await click(button('Find my fit'));await fill(field('Your message'),'My budget is $25,000.');await submit(field('Your message').closest('form'));
+ await click(button('AI chat'));await fill(field('Your message'),'My budget is $25,000.');await submit(field('Your message').closest('form'));
  assert.equal(field('Maximum budget (USD)').value,'25000');
  await fill(field('Your message'),'I need 5 seats.');await submit(field('Your message').closest('form'));
  const sends=calls.filter(c=>c.path.endsWith('/assist'));assert.equal(sends.length,2);assert.equal(sends[1].body.preferences.budget_cents,2500000);assert.equal(sends[1].body.history.length,2);
 });
 
-test('limited numeric delivery is visibly labeled and retains checked preferences',async()=>{
- const calls=[];const api=async(path,method,body)=>{calls.push({path,method,body});if(!method)return inventory;return {preferences:{...prefs,budget_cents:2500000,budget_kind:'vehicle'},answer:'Published price: $23,500.00 USD.',follow_up:'Which features are required?',recommended_ids:[],matches:['a'],sources:[],answer_mode:'grounded_summary',mode:'live_ai'};};
+test('the chat shows the current message while waiting and displays the delivered reply',async()=>{
+ const calls=[];let finish;
+ const api=async(path,method,body)=>{calls.push({path,method,body});if(!method)return inventory;return new Promise(resolve=>{finish=resolve;});};
  await act(async()=>root.render(h(PublicShop,{key:'limited-chat',id:'a',api,config})));
- await click(button('Find my fit'));await fill(field('Your message'),'My vehicle budget is $25,000.');await submit(field('Your message').closest('form'));
- assert.match(document.querySelector('[role="status"]').textContent,/Showing confirmed listing details instead/);
- assert.match(document.querySelector('[role="log"]').textContent,/Confirmed listing summary/);
- assert.match(document.querySelector('[role="log"]').textContent,/not the original AI explanation/);
+ await click(button('AI chat'));await fill(field('Your message'),'My vehicle budget is $25,000.');await submit(field('Your message').closest('form'));
+ assert.match(document.querySelector('[role="log"]').textContent,/My vehicle budget is \$25,000.*Thinking/s);
+ assert.equal(button('Send to AI').disabled,true);
+ await act(async()=>finish({preferences:{...prefs,budget_cents:2500000,budget_kind:'vehicle'},answer:'I’d prioritize the lower asking price for your commute.',follow_up:'Which features are required?',recommended_ids:[],matches:['a'],sources:[],answer_mode:'partial_ai_explanation',mode:'live_ai'}));
+ assert.match(document.querySelector('[role="log"]').textContent,/I’d prioritize the lower asking price for your commute/);
+ assert.match(document.querySelector('[role="log"]').textContent,/Some details could not be verified/);
  assert.equal(field('Maximum budget (USD)').value,'25000');
  assert.equal(calls.filter(c=>c.path.endsWith('/assist')).length,1);
  await act(async()=>root.render(h(SystemStatus,{key:'limited-evidence',api:async(path)=>path==='/diagnostics'?{auth:'ready',database:'connected'}:[{task_id:'limited',operation:'shopping_assistant',application_outcome:'accepted_with_limits',provider_outcome:'succeeded',source_ids:['listing:a:r1:price'],rejection:{stage:'sources',reason:'unapproved_source',field:'answer'}}]})));
@@ -106,7 +109,7 @@ test('Find my fit carries selected vehicles and staff submission never displays 
  };
  await act(async()=>root.render(h(PublicShop,{key:'selected-handoff',id:'a',api,config})));
  for(const input of document.querySelectorAll('.inventory-card input[type="checkbox"]'))await click(input);
- await click(button('Find my fit'));await fill(field('Your message'),'Compare my selected vehicles.');await submit(field('Your message').closest('form'));
+ await click(button('AI chat'));await fill(field('Your message'),'Compare my selected vehicles.');await submit(field('Your message').closest('form'));
  assert.deepEqual(calls.find(c=>c.path.endsWith('/assist')).body.selected_ids,['a','b']);
  await click(button('Ask staff to follow up'));await fill(field('Email or phone for follow-up'),'class-test@example.invalid');
  await click(document.querySelector('.staff-help input[type="checkbox"]'));await submit(field('Email or phone for follow-up').closest('form'));

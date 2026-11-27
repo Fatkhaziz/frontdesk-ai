@@ -90,7 +90,7 @@ with tempfile.TemporaryDirectory() as tmp:
             page.get_by_role('button',name='Inquiries',exact=False).click();page.get_by_role('button',name='Refresh inquiries').click()
             expect(page.get_by_text('browser@example.invalid',exact=False)).to_be_visible()
             page.get_by_label('Status for 2022 Toyota Camry inquiry').select_option('pending');expect(page.get_by_role('status')).to_contain_text('Inquiry status saved')
-            page.get_by_role('button',name='System status',exact=True).click();expect(page.get_by_role('heading',name='System status')).to_be_visible();expect(page.get_by_text('Supabase Auth',exact=True)).to_be_visible()
+            page.get_by_role('button',name='Request log',exact=True).click();expect(page.get_by_role('heading',name='Request log')).to_be_visible();page.get_by_text('Service and usage details',exact=True).click();expect(page.get_by_text('Supabase Auth',exact=True)).to_be_visible()
             page.get_by_role('button',name='Listings',exact=True).click()
             page.get_by_text('Listing management',exact=True).click()
             page.once('dialog',lambda dialog:dialog.dismiss());page.get_by_role('button',name='Delete listing',exact=True).click()
