@@ -1,13 +1,8 @@
-"""Render source values and recover safely from unverified numeric wording.
-
-There is exactly one provider request. Model preferences, source membership and
-recommendations must pass the existing checks. Unusable numeric or citation
-wording discards ALL model prose; rejected claims never become evidence.
-"""
+"""Check each live Grok paragraph against its own published sources."""
 import re
 
 from .ai_rejection import Rejection
-from .shopping import Preferences, eligible, validate_answer
+from .shopping import validate_answer
 
 
 def compact_sources(sources):
@@ -65,53 +60,76 @@ def render_source_values(result, sources):
     return {**rendered, 'source_ids': refs}
 
 
-def confirmed_summary(result, data, body, sources):
-    """A separately labeled server summary, never an edited model answer."""
-    prefs = Preferences.model_validate(result['preferences'])
-    allowed = {s['id']: s for s in sources}
-    inventory = {l['id']: l for l in data['listings']}
-    ids = body.selected_ids or result['recommended_ids'] or [l['id'] for l in data['listings'] if eligible(l, prefs)][:3]
-    refs, lines = [], []
-    for identity in ids:
-        car = inventory[identity]
-        facts = car['facts']
-        values = []
-        for field in ('price', 'mileage', 'seats', 'mpg_combined', 'cargo_cubic_feet'):
-            source_id = f"listing:{identity}:r{car['revision']}:{field}"
-            source = allowed.get(source_id)
-            if source and source.get('value_text'):
-                values.append(source['value_text'])
-                refs.append(source_id)
-        title = f"{facts['year']} {facts['make']} {facts['model']}"
-        fit = 'Meets your recorded hard requirements.' if eligible(car, prefs) else 'Some requirements are unmet or unconfirmed.'
-        lines.append(f"{title}: {'; '.join(values)}. {fit}")
-    answer = '\n\n'.join(lines) if lines else 'No published vehicle can be confirmed to meet all your recorded requirements. Staff can help clarify missing information.'
-    answer += '\n\nTaxes, fees, condition, reliability and market fairness are not established by these specifications.'
-    follow_up = ('Does your budget cover the vehicle price or the total including taxes and fees?'
-                 if prefs.budget_kind == 'unknown' else
-                 'Are there additional features you require?' if not prefs.required_features else
-                 'Would you like staff to confirm the missing details and total costs?')
-    # Re-run the full validator. Invalid preferences, foreign sources, wrong
-    # recommendations, or an oversized summary still cannot pass this path.
-    return validate_answer({**result, 'answer': answer, 'follow_up': follow_up, 'source_ids': refs}, data, body, sources)
+def prose_rejection(exc):
+    return (exc.stage == 'claims' or
+            (exc.stage == 'sources' and exc.reason in ('unapproved_source', 'sources')) or
+            (exc.stage == 'shape' and exc.reason == 'answer'))
 
 
 def validate_delivery(result, data, body, sources):
-    rendered = None
+    result = normalize_sources(result, sources)
+    if isinstance(result['answer'], str):
+        # Accept a checked plain-text reply if the model uses the older format.
+        legacy = validate_answer(render_source_values(result, sources), data, body, sources)
+        return {**legacy, 'answer_mode': 'ai_explanation'}
+
+    paragraphs = result['answer']
+    if not isinstance(paragraphs, list) or not 1 <= len(paragraphs) <= 4:
+        raise Rejection('shape', 'answer', 'answer')
+    if not isinstance(result['follow_up'], str):
+        raise Rejection('shape', 'answer', 'follow_up')
+
+    context = {'preferences': result['preferences'], 'answer': 'Published inventory.',
+               'follow_up': '', 'recommended_ids': [], 'source_ids': []}
+    # Preference errors belong to the whole response, even if some text is valid.
+    checked = validate_answer(context, data, body, sources)
+    paragraphs_kept, refs, rejected = [], [], None
+    for paragraph in paragraphs:
+        if not isinstance(paragraph, dict) or set(paragraph) != {'text', 'source_ids'}:
+            raise Rejection('shape', 'answer', 'answer')
+        candidate = {**checked, 'answer': paragraph['text'], 'source_ids': paragraph['source_ids']}
+        try:
+            rendered = render_source_values(candidate, sources)
+            valid = validate_answer(rendered, data, body, sources)
+        except Rejection as exc:
+            if not prose_rejection(exc):
+                raise
+            if rejected is None:
+                rejected = exc
+            continue
+        paragraphs_kept.append(valid['answer'].strip())
+        refs.extend(valid['source_ids'])
+    if not paragraphs_kept:
+        raise rejected or Rejection('shape', 'answer', 'answer')
+
+    follow_up = ''
+    if result['follow_up']:
+        candidate = {**checked, 'follow_up': result['follow_up'], 'source_ids': result['source_ids']}
+        try:
+            valid = validate_answer(render_source_values(candidate, sources), data, body, sources)
+            follow_up = valid['follow_up']
+            refs.extend(valid['source_ids'])
+        except Rejection as exc:
+            if not prose_rejection(exc):
+                raise
+            if rejected is None:
+                rejected = exc
+
+    by_id = {source['id']: source for source in sources}
+    # A comparison citation includes exact field references for its two inputs.
+    refs.extend(input_id for ref in dict.fromkeys(refs) for input_id in by_id[ref].get('inputs', []))
+    final = {**checked, 'answer': '\n\n'.join(paragraphs_kept), 'follow_up': follow_up,
+             'recommended_ids': result['recommended_ids'], 'source_ids': list(dict.fromkeys(refs))}
     try:
-        rendered = render_source_values(result, sources)
-        return {**validate_answer(rendered, data, body, sources), 'answer_mode': 'ai_explanation'}
+        validated = validate_answer(final, data, body, sources)
     except Rejection as exc:
-        numeric = (exc.stage, exc.reason) == ('claims', 'unsupported_number')
-        inline_source = (exc.stage, exc.reason) == ('sources', 'unapproved_source') and exc.field in ('answer', 'follow_up')
-        if not (numeric or inline_source):
+        if not rejected or exc.reason != 'uncited_recommendation':
             raise
-        # Discard ALL model prose, including unusable inline references. Validate
-        # the structured result independently before building anything useful:
-        # foreign declared sources, bad needs and invalid recommendations still
-        # fail. This never turns an unknown citation into approved evidence.
-        structured = normalize_sources(rendered if rendered is not None else result, sources)
-        structured = validate_answer({**structured, 'answer': 'Checking published options.', 'follow_up': ''}, data, body, sources)
-        summary = confirmed_summary(structured, data, body, sources)
-        return {**summary, 'answer_mode': 'grounded_summary',
-                'validation_rejection': exc.diagnostic(sources)}
+        # A dropped paragraph may have been the evidence for a suggestion.
+        # Drop that suggestion too. Scope and hard requirements already passed.
+        cited_cars = {by_id[ref].get('listing_id') for ref in refs}
+        final['recommended_ids'] = [identity for identity in final['recommended_ids'] if identity in cited_cars]
+        validated = validate_answer(final, data, body, sources)
+    if rejected:
+        return {**validated, 'answer_mode': 'partial_ai_explanation', 'validation_rejection': rejected.diagnostic(sources)}
+    return {**validated, 'answer_mode': 'ai_explanation'}

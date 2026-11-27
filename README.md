@@ -4,13 +4,11 @@ A small-business receptionist project. Fall Release 1 demonstrates a dealership:
 
 ## Current release
 
-**Workspace 2** introduces the dark left navigation, owner summary, expanded inventory layout and a focused customer conversation view. See [the update notes](docs/workspace-2-update.md). Both launch commands rebuild the current frontend, even when an optional live AI check fails.
-
-Code implements the AI gateway and validation repairs, searchable owner listings, selected-vehicle comparison, accepted-conversation export and protected practice allowance. Automated checks use mocked providers. **The latest real customer first turn and follow-up still require acceptance on the configured Mac.** Earlier failed completions are not relabeled as successful answers.
+The customer site has Inventory, Compare, AI chat and FAQs. Each chat turn sends the buyer's current question and preferences to Grok. The backend checks the returned paragraphs against published evidence before displaying them. Owners manage knowledge and inquiries from the dashboard. Request evidence is available in the owner's **Request log**. The [live walkthrough](docs/showcase-release.md) maps each action to its code and tables.
 
 - [Complete requirements, use cases and measurable targets](docs/requirements.md)
 - [Current technical design and code/data map](docs/detailed-design.md)
-- [Practice and live verification guide](docs/showcase-release.md)
+- [Live walkthrough and technical reference](docs/showcase-release.md)
 - [Read-only password and AI evidence queries](docs/evidence-queries.sql)
 - [20-minute presentation with speaking notes](docs/presentation-notes.md)
 - [Presentation slide file copy](docs/FrontDesk_AI_End_of_Semester_Presentation.pdf)
@@ -27,11 +25,11 @@ Pull the merged main branch. Stop the earlier server in its Terminal with Contro
 bash scripts/launch-showcase.sh
 ```
 
-Open http://127.0.0.1:8000/ and sign in privately. Listings → Open customer inventory opens the matching public page. Keep the server Terminal open.
+Open http://127.0.0.1:8000/ and sign in privately. **Open customer site** in the dashboard header opens the buyer's tab. Keep the server Terminal open.
 
 The launcher applies additive migration 006, checks existing-row preservation, builds and starts the app. It makes **no inference request**. Historical usage is preserved. The shared conservative ledger limits preparation to $1.00 from the owner-declared $4.97 remaining allowance and protects at least $3.50 while preparation mode is active. An attempt count is not the provider dollar balance. Verify actual credit separately. No purchases, top-ups, counter resets or automatic paid retries occur.
 
-For a deliberate three-turn real integration check, use `bash scripts/launch-showcase.sh --practice --verify-live`. The check stops at the first failure, never retries, and saves synthetic raw responses privately on the Desktop for diagnosis. A failed optional check is reported and the newly built website still starts. It does not prove browser sign-in.
+Rehearse by sending your first question and a follow-up in **AI chat**. Automated checks simulate Auth and Grok. Your live rehearsal verifies the actual account configuration and provider replies.
 
 Before the presentation, the owner can deliberately launch:
 

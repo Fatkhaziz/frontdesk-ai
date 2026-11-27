@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import Icon from "./Icon";
 import {
   Api,
   Config,
@@ -72,15 +71,15 @@ function fact(f: Facts, key: keyof Facts) {
             ? v.toLocaleString()
             : String(v).replaceAll("_", " ").toUpperCase();
 }
+type Source = { id: string; label: string; text: string; listing_id?: string; reference?: string };
 type Message = {
   question: string;
   answer: string;
   follow_up?: string;
-  sources: any[];
-  task_id?: string;
-  request_id?: string;
-  answer_mode?: "ai_explanation" | "grounded_summary";
+  sources: Source[];
+  partial: boolean;
 };
+type ChatError = { question: string; detail: string; requestId?: string };
 
 export default function PublicShop({
   id,
@@ -98,7 +97,7 @@ export default function PublicShop({
     } | null>(null),
     [tab, setTab] = useState(() => {
       const view = new URLSearchParams(window.location.search).get("view");
-      if (view === "fit") return "Find my fit";
+      if (view === "chat" || view === "fit") return "AI chat";
       if (view === "questions") return "FAQs";
       return "Inventory";
     }),
@@ -110,6 +109,8 @@ export default function PublicShop({
     [featuresText, setFeaturesText] = useState(""),
     [question, setQuestion] = useState(""),
     [messages, setMessages] = useState<Message[]>([]);
+  const [pendingQuestion, setPendingQuestion] = useState("");
+  const [chatError, setChatError] = useState<ChatError | null>(null);
   const [busy, setBusy] = useState(false),
     [aiBusy, setAiBusy] = useState(false),
     [comparison, setComparison] = useState<any>(null),
@@ -124,13 +125,6 @@ export default function PublicShop({
     requestKey = useRef(crypto.randomUUID()),
     chatEnd = useRef<HTMLDivElement>(null);
   const ai = config.questionMode === "ai" && !!config.shoppingAiEnabled;
-  function exportConversation() {
-    const content = { exported_at: new Date().toISOString(), business_id: id, preferences, selected_ids: selected,
-      note: "Actual accepted responses from this browser tab. Not a new AI request.", messages };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], {type: "application/json"}));
-    const link = document.createElement("a"); link.href = url; link.download = "frontdesk-conversation.json"; link.click();
-    URL.revokeObjectURL(url);
-  }
   useEffect(() => {
     api("/shop/" + id)
       .then(setData)
@@ -139,9 +133,9 @@ export default function PublicShop({
   useEffect(() => {
     const container = chatEnd.current?.parentElement;
     if (container) container.scrollTop = container.scrollHeight;
-  }, [messages, aiBusy]);
+  }, [messages, aiBusy, chatError]);
   useEffect(() => {
-    const resize = () => setPreferencesOpen(tab === "Find my fit" && window.innerWidth > 960);
+    const resize = () => setPreferencesOpen(tab === "AI chat" && window.innerWidth > 960);
     resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
@@ -192,6 +186,14 @@ export default function PublicShop({
     };
     return next;
   }
+  function showComparison(result: any) {
+    setComparison(result);
+    if (result) {
+      setData((previous) => previous && ({...previous, listings: previous.listings.map((listing) =>
+        result.listings.find((car: Vehicle) => car.id === listing.id) ?? listing,
+      )}));
+    }
+  }
   async function compare() {
     await work(async () => {
       const updated = currentPrefs();
@@ -200,82 +202,58 @@ export default function PublicShop({
         listing_ids: selected,
         preferences: updated,
       });
-      setComparison(r);
-      setData((d) =>
-        d
-          ? {
-              ...d,
-              listings: d.listings.map(
-                (l) => r.listings.find((v: Vehicle) => v.id === l.id) || l,
-              ),
-            }
-          : d,
-      );
+      showComparison(r);
       setTab("Compare");
     });
   }
   async function ask(text = question) {
+    const message = text.trim();
+    if (!message || !ai || lock.current) return;
+    setTab("AI chat");
     await work(async () => {
-      if (!text.trim()) return;
-      const history = messages.slice(-4).flatMap((m) => [
-        { role: "user", content: m.question },
-        {
-          role: "assistant",
-          content: (m.answer + " " + (m.follow_up || "")).slice(0, 1600),
-        },
-      ]);
-      const r = await api("/shop/" + id + "/assist", "POST", {
-        message: text,
-        preferences: currentPrefs(),
-        history,
-        selected_ids: selected,
-      });
-      setPreferences(r.preferences);
-      setFeaturesText(r.preferences.required_features.join(", "));
-      setBudget(
-        r.preferences.budget_cents === null
-          ? ""
-          : String(r.preferences.budget_cents / 100),
-      );
-      setRecommended(r.recommended_ids);
-      setMatches(r.matches);
-      if (tab === "Compare" && selected.length >= 2) {
-        const refreshed = await api("/shop/" + id + "/compare", "POST", {
-          listing_ids: selected,
-          preferences: r.preferences,
+      setPendingQuestion(message);
+      setChatError(null);
+      try {
+        const history = messages.slice(-4).flatMap((turn) => [
+          { role: "user", content: turn.question },
+          { role: "assistant", content: (turn.answer + " " + (turn.follow_up || "")).slice(0, 1600) },
+        ]);
+        const reply = await api("/shop/" + id + "/assist", "POST", {
+          message,
+          preferences: currentPrefs(),
+          history,
+          selected_ids: selected,
         });
-        setComparison(refreshed);
-        setData((d) =>
-          d
-            ? {
-                ...d,
-                listings: d.listings.map(
-                  (l) =>
-                    refreshed.listings.find((v: Vehicle) => v.id === l.id) || l,
-                ),
-              }
-            : d,
-        );
-      } else setComparison(null);
-      setMessages((ms) => [
-        ...ms,
-        {
-          question: text,
-          answer: r.answer,
-          follow_up: r.follow_up,
-          sources: r.sources,
-          task_id: r.task_id,
-          request_id: r.request_id,
-          answer_mode: r.answer_mode,
-        },
-      ]);
-      setQuestion("");
-      setNotice(
-        r.answer_mode === "grounded_summary"
-          ? "Some AI wording or citations could not be verified. Showing confirmed listing details instead. Your checked preferences are retained."
-          : "Answer received from live AI and checked against published source IDs. Review the facts and limitations below.",
-      );
+        setMessages((existing) => [...existing, {
+          question: message, answer: reply.answer, follow_up: reply.follow_up,
+          sources: reply.sources, partial: reply.answer_mode === "partial_ai_explanation",
+        }]);
+        setPreferences(reply.preferences);
+        setFeaturesText(reply.preferences.required_features.join(", "));
+        setBudget(reply.preferences.budget_cents === null ? "" : String(reply.preferences.budget_cents / 100));
+        setRecommended(reply.recommended_ids);
+        setMatches(reply.matches);
+        showComparison(reply.comparison ?? null);
+        setQuestion("");
+      } catch (e) {
+        const err = e instanceof Error ? e as Error & { requestId?: string } : null;
+        setChatError({ question: message, detail: err?.message || "The message could not be sent.", requestId: err?.requestId });
+        setQuestion(message);
+      } finally {
+        setPendingQuestion("");
+      }
     }, true);
+  }
+  function newChat() {
+    setMessages([]);
+    setChatError(null);
+    setQuestion("");
+    setPreferences(defaults);
+    setBudget("");
+    setFeaturesText("");
+    setRecommended([]);
+    setMatches(null);
+    setComparison(null);
   }
   function prepareFollowup() {
     setShowFollowup(true);
@@ -292,47 +270,37 @@ export default function PublicShop({
   const chosen = data.listings.filter((l) => selected.includes(l.id));
   return (
     <div className="shop" data-view={tab}>
-      <div className="shop-hero">
-        <div>
-          <p className="eyebrow">{data.name} · FrontDesk AI</p>
-          <h1>{tab === "Find my fit" ? "Tell us what matters." : <>Find your next car.<br /><span>Know why it fits.</span></>}</h1>
-          <p className="lead">
-            Explore reviewed inventory, compare the details, and get an explanation built around your needs.
-          </p>
-          <button className="hero-cta" onClick={() => setTab("Find my fit")}>Help me choose <Icon name="arrow" /></button>
-        </div>
-        <div className="hero-stamp">
-          <strong>
-            {
-              data.listings.filter((l) => l.facts.availability === "available")
-                .length
-            }
-          </strong>
-          <span>available vehicles</span>
-          <small>Reviewed information.<br />A clearer starting point.</small>
-        </div>
+      <div className="shop-heading">
+        <h1>{data.name}</h1>
+        {tab !== "AI chat" && <button className="primary" onClick={() => setTab("AI chat")}>Ask AI</button>}
       </div>
       <nav className="shop-nav" aria-label="Shopping sections">
-        {["Inventory", "Find my fit", "Compare", "FAQs"].map((t) => (
+        {["Inventory", "Compare", "AI chat", "FAQs"].map((t) => (
           <button
             key={t}
             aria-current={tab === t ? "page" : undefined}
             className={tab === t ? "active" : ""}
-            onClick={() => setTab(t)}
+            onClick={() => {
+              setTab(t);
+              if (t === "Compare" && selected.length >= 2 && !comparison) void compare();
+            }}
           >
             {t}
-            {t === "Compare" && (
+            {t === "Compare" && selected.length > 0 && (
               <span className="count">{selected.length}</span>
             )}
           </button>
         ))}
       </nav>
-      {selected.length > 0 && <div className="selection-tray" aria-label="Selected vehicles"><span><strong>{selected.length} of 3 selected</strong> · {data.listings.filter(l => selected.includes(l.id)).map(l => l.facts.model).join(" + ")}</span><div className="actions"><button disabled={busy || selected.length < 2} onClick={compare}>Compare selected</button><button className="primary" onClick={() => setTab("Find my fit")}>Ask about my selection</button><button onClick={() => { setSelected([]); setComparison(null); }}>Clear selection</button></div></div>}
-      {data.listings.some((l) => l.facts.synthetic) && (
-        <p className="notice">
-          Vehicles marked “Fictional example” use illustrative specifications
-          for the class showcase. They are not real sale offers.
-        </p>
+      {selected.length > 0 && tab !== "FAQs" && (
+        <div className="selection-tray" aria-label="Selected vehicles">
+          <span><strong>Selected:</strong> {chosen.map((car) => car.facts.model).join(", ")}</span>
+          <div className="actions">
+            {tab === "Inventory" && <button className="primary" disabled={busy || selected.length < 2} onClick={compare}>Compare selected ({selected.length})</button>}
+            {tab === "Inventory" && <button onClick={() => setTab("AI chat")}>Ask about selection</button>}
+            <button disabled={busy} onClick={() => { setSelected([]); setComparison(null); }}>Clear selection</button>
+          </div>
+        </div>
       )}
       {error && (
         <p role="alert" className="notice error-notice">
@@ -344,17 +312,16 @@ export default function PublicShop({
           {notice}
         </p>
       )}
-      <div className={"shop-layout" + (tab === "Find my fit" ? " fit-layout" : "")}>
-        <aside className="preference-panel">
+      <div className={"shop-layout" + (tab === "AI chat" ? " fit-layout" : "")}>
+        <aside className="preference-panel" hidden={tab !== "AI chat" && tab !== "Compare"}>
           <details
             open={preferencesOpen}
             onToggle={(e) => setPreferencesOpen(e.currentTarget.open)}
           >
             <summary className="preference-summary">
-              <span className="eyebrow">Your requirements</span>
-              <strong>What matters to you?</strong>
+              <strong>Your preferences</strong>
             </summary>
-            <div className="preference-fields">
+            <fieldset className="preference-fields" disabled={busy}>
               <p className="muted">
                 Chat can fill these in. You can also change them yourself.
               </p>
@@ -504,26 +471,7 @@ export default function PublicShop({
                   </label>
                 ))}
               </fieldset>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  setPreferences(defaults);
-                  setBudget("");
-                  setFeaturesText("");
-                  setMessages([]);
-                  setRecommended([]);
-                  setMatches(null);
-                  setComparison(null);
-                  setNotice("Started a new consultation.");
-                }}
-              >
-                Start over
-              </button>
-              <p className="privacy">
-                Preferences stay in this page until you submit them to staff. AI
-                messages go to xAI. Keep contact details out of chat.
-              </p>
-            </div>
+            </fieldset>
           </details>
         </aside>
         <div className="shop-main">
@@ -533,17 +481,9 @@ export default function PublicShop({
                 <div>
                   <h2>Published inventory</h2>
                   <p className="muted">
-                    Select two or three vehicles to compare. Unknown
-                    specifications stay marked “Not provided”.
+                    Select two or three vehicles to compare.
                   </p>
                 </div>
-                <button
-                  className="primary"
-                  disabled={selected.length < 2 || busy}
-                  onClick={compare}
-                >
-                  Compare selected ({selected.length})
-                </button>
               </div>
               {!data.listings.length && (
                 <section className="empty">
@@ -563,18 +503,6 @@ export default function PublicShop({
                       (selected.includes(l.id) ? "selected" : "")
                     }
                   >
-                    <div className="vehicle-silhouette" aria-hidden="true">
-                      <span>
-                        {l.facts.body_style?.toUpperCase() || "VEHICLE"}
-                      </span>
-                      <svg viewBox="0 0 240 80" fill="none">
-                        <path d="M20 52h12l25-29h85l44 25 30 8v15H20V52Z" />
-                        <path d="M64 30h35v20H47m60-20h30l35 20h-65V30Z" />
-                        <circle cx="61" cy="67" r="12" />
-                        <circle cx="180" cy="67" r="12" />
-                      </svg>
-                      <small>Illustration · vehicle photos not supplied</small>
-                    </div>
                     <div className="inventory-content">
                       <span
                         className={
@@ -618,13 +546,13 @@ export default function PublicShop({
                           type="checkbox"
                           checked={selected.includes(l.id)}
                           disabled={
-                            !selected.includes(l.id) && selected.length >= 3
+                            busy || (!selected.includes(l.id) && selected.length >= 3)
                           }
                           onChange={() => choose(l.id)}
                         />
                         Compare this vehicle
                       </label>
-                      <a href={"/listing/" + l.id}>View approved listing ↗</a>
+                      <a href={"/listing/" + l.id}>View listing</a>
                     </div>
                   </article>
                 ))}
@@ -633,7 +561,7 @@ export default function PublicShop({
           )}
           {tab === "FAQs" && (
             <section>
-              <h2>Owner-approved questions and answers</h2>
+              <h2>Common questions</h2>
               {!data.knowledge.length && <p className="muted">No questions have been published yet.</p>}
               {data.knowledge.map((item) => (
                 <details className="evidence-card" key={item.id}>
@@ -713,8 +641,7 @@ export default function PublicShop({
                         <strong>
                           Listed price difference:{" "}
                           {money(comparison.price_difference_cents)}.
-                        </strong>{" "}
-                        Calculated by the backend, without an AI request.
+                        </strong>
                       </p>
                       {comparison.listings.map((l: any) => (
                         <article key={l.id}>
@@ -742,17 +669,12 @@ export default function PublicShop({
                       ))}
                     </div>
                   )}
-                  <p className="notice">
-                    A vehicle price below your total budget does not prove it
-                    fits after taxes and fees. Missing costs require staff
-                    confirmation.
-                  </p>
                   <button
                     className="primary"
                     disabled={busy || !ai}
                     onClick={() =>
                       ask(
-                        "Compare the selected vehicles against my preferences. Explain the trade-offs and any missing information. Do not assume missing preferences.",
+                        "How do these vehicles compare for my needs? Explain the trade-offs and what I should check with staff.",
                       )
                     }
                   >
@@ -762,54 +684,20 @@ export default function PublicShop({
               )}
             </>
           )}
-          {(tab === "Find my fit" || tab === "Compare") && (
+          {tab === "AI chat" && (
             <section className="shopping-chat">
               <div className="section-heading">
-                <div>
-                  <p className="eyebrow">A conversation around your needs</p>
-                  <h2>
-                    {tab === "Compare"
-                      ? "Discuss the trade-offs"
-                      : "Find my fit"}
-                  </h2>
-                </div>
-                <span className="badge">
-                  {ai ? "Live AI enabled" : "AI disabled"}
-                </span>
+                <h2>Shopping assistant</h2>
+                {(messages.length > 0 || chatError) && <button className="text-button" disabled={busy} onClick={newChat}>New chat</button>}
               </div>
-              {messages.length > 0 && <div className="actions chat-tools"><button onClick={exportConversation}>Save conversation</button><button disabled={busy} onClick={() => { setMessages([]); setRecommended([]); setMatches(null); setQuestion(""); }}>New conversation</button><small>Saved files contain the messages you entered. Refreshing this page clears the chat.</small></div>}
-              <p>
-                Describe your budget, driving routine or priorities. The
-                assistant can ask a follow-up, suggest options and explain its
-                sources.
-              </p>
-              {!ai && (
-                <p className="notice">
-                  Live AI is disabled. You can still browse inventory, set
-                  preferences and compare facts. A rehearsal is not evidence of
-                  a real Grok call.
-                </p>
-              )}
-              {!messages.length && (
-                <div className="starter-prompts">
-                  {[
-                    "I have $25,000 and commute every day. What should I consider?",
-                    "I need five seats and room for a stroller. Which options have documented cargo space?",
-                    "I drive on snowy roads and require AWD. Which listings confirm it?",
-                    "I drive a long way for work. Compare fuel economy and mileage, and tell me what else I should check.",
-                    "Is this a fair price? What can you actually verify?",
-                  ].map((t) => (
-                    <button key={t} onClick={() => setQuestion(t)}>
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              )}
               <div
                 className="shopping-conversation"
                 role="log"
                 aria-live="polite"
               >
+                {!messages.length && !pendingQuestion && !chatError && (
+                  <p className="chat-intro">{ai ? "Tell me how you’ll use the car and what matters most to you." : "Chat is unavailable. You can compare listings or contact staff."}</p>
+                )}
                 {messages.map((m, i) => (
                   <article key={i}>
                     <p className="bubble customer">
@@ -817,11 +705,8 @@ export default function PublicShop({
                       {m.question}
                     </p>
                     <div className="bubble assistant">
-                      <strong>FrontDesk AI</strong>
-                      {m.answer_mode === "grounded_summary" && (
-                        <p className="privacy">Confirmed listing summary · unverified AI wording was omitted.</p>
-                      )}
-                      <p style={{whiteSpace: "pre-line"}}>{m.answer}</p>
+                      <strong>Assistant</strong>
+                      <p className="chat-reply">{m.answer}</p>
                       {m.follow_up && (
                         <p className="followup-question">{m.follow_up}</p>
                       )}
@@ -829,7 +714,7 @@ export default function PublicShop({
                         <details>
                           <summary>Sources used ({m.sources.length})</summary>
                           <ul>
-                            {m.sources.map((s: any) => (
+                            {m.sources.map((s) => (
                               <li key={s.id}>
                                 {s.listing_id ? (
                                   <a
@@ -843,20 +728,27 @@ export default function PublicShop({
                                   <strong>{s.label}</strong>
                                 )}
                                 <p>{s.text}</p>
+                                {s.reference && <small>{s.reference}</small>}
                               </li>
                             ))}
                           </ul>
                         </details>
                       )}
-                      <small>
-                        {m.answer_mode === "grounded_summary"
-                          ? "AI interpreted your needs; the server supplied this fact summary. This is a limited response, not the original AI explanation."
-                          : "Live AI · response checked against published source references. Recommendations still require judgment."}
-                      </small>
+                      {m.partial && <small>Some details could not be verified and were left out.</small>}
                     </div>
                   </article>
                 ))}
-                {aiBusy && <p role="status">Checking published information…</p>}
+                {pendingQuestion && <article>
+                  <p className="bubble customer"><strong>You</strong>{pendingQuestion}</p>
+                  <p className="bubble assistant" role="status">Thinking…</p>
+                </article>}
+                {chatError && <article>
+                  <p className="bubble customer"><strong>You</strong>{chatError.question}</p>
+                  <div className="bubble chat-error" role="alert">
+                    {chatError.detail}
+                    {chatError.requestId && <details><summary>Request reference</summary><code>{chatError.requestId}</code></details>}
+                  </div>
+                </article>}
                 <div ref={chatEnd} />
               </div>
               {recommended.length > 0 && (
@@ -892,32 +784,24 @@ export default function PublicShop({
                   Your message
                   <textarea
                     maxLength={1000}
+                    disabled={aiBusy || !ai}
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Tell us what you need, or ask a follow-up…"
+                    placeholder="Ask about a car or tell us what you need…"
                   />
                 </label>
                 <button
                   className="primary"
                   disabled={busy || !ai || !question.trim()}
                 >
-                  {aiBusy ? "Thinking…" : "Send to AI"}
+                  Send to AI
                 </button>
-                <small>
-                  Each send or explanation uses a paid request, subject to the
-                  owner’s shared limit.
-                </small>
+                <small>Messages go to xAI. Use the staff form for contact details.</small>
               </form>
             </section>
           )}
           <section className="staff-help">
-            <div>
-              <h2>A person can take it from here.</h2>
-              <p>
-                Send your selected vehicles, recorded requirements and question
-                to the dealership. Nothing is sent until you approve it.
-              </p>
-            </div>
+            <h2>Contact the dealership</h2>
             <button onClick={prepareFollowup}>Ask staff to follow up</button>
             {showFollowup && (
               <form
@@ -925,27 +809,18 @@ export default function PublicShop({
                 onSubmit={(e) => {
                   e.preventDefault();
                   work(async () => {
-                    if (
-                      budget.trim() &&
-                      dollarsToCents(budget) !== preferences.budget_cents
-                    )
-                      throw Error(
-                        "Finish editing the budget before submitting.",
-                      );
                     await api("/shop/" + id + "/inquiries", "POST", {
                       request_key: requestKey.current,
                       contact,
                       message: summary,
                       consent,
-                      preferences,
+                      preferences: currentPrefs(),
                       listing_ids: selected,
                     });
                     setShowFollowup(false);
                     setContact("");
                     setConsent(false);
-                    setNotice(
-                      "Inquiry saved in the staff inbox. No appointment, email or text message was sent.",
-                    );
+                    setNotice("Inquiry saved in the staff inbox.");
                   });
                 }}
               >

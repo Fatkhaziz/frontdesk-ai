@@ -17,7 +17,6 @@ import BusinessSettings from "./BusinessSettings";
 import PublicBusiness from "./PublicBusiness";
 import PublicShop from "./PublicShop";
 import KnowledgeSetup from "./KnowledgeSetup";
-import Showcase from "./Showcase";
 import { Workspace } from "./business";
 import Icon from "./Icon";
 import "./style.css";
@@ -37,7 +36,7 @@ function App() {
   const [listingSearch, setListingSearch] = useState("");
   const [listingFilter, setListingFilter] = useState("all");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [tab, setTab] = useState("Listings"),
+  const [tab, setTab] = useState(new URLSearchParams(location.search).get("view") === "request-log" ? "Request log" : "Listings"),
     [editorKey, setEditorKey] = useState(0);
   const lid = location.pathname.startsWith("/listing/")
     ? location.pathname.split("/")[2]
@@ -68,13 +67,16 @@ function App() {
     });
     const data = await r.json();
     if (!r.ok) {
+      if (r.status === 422 && path.endsWith("/assist") && typeof data.detail === "string")
+        throw Error(data.detail);
       if (r.status === 422)
         throw Error("Please check the required fields and use valid numbers.");
-      throw Error(
+      const requestId = r.headers.get("X-Request-ID");
+      throw Object.assign(Error(
         typeof data.detail === "string"
           ? data.detail
           : "We could not complete that action. Please try again.",
-      );
+      ), { requestId });
     }
     return data;
   }
@@ -138,13 +140,13 @@ function App() {
   const salon = workspace?.profile && workspace.profile.domain !== "dealership";
   const tabs = [
     ...(!salon ? ["Listings"] : []),
-    ...(!salon && config?.localShowcase && workspace?.role === "owner" ? ["Showcase"] : []),
     ...(workspace?.role === "owner" ? ["Owner knowledge"] : []),
     "Inquiries",
     "Business settings",
-    ...(workspace?.role === "owner" ? ["System status"] : []),
   ];
-  const visibleTab = tabs.includes(tab) ? tab : "Business settings";
+  const visibleTab = tab === "Request log" && workspace?.role === "owner"
+    ? "Request log"
+    : tabs.includes(tab) ? tab : "Business settings";
   return (
     <main className={token && !shopId && !businessId && !lid ? "owner-app" : "public-app"}>
       {(!token || shopId || businessId || lid) && <header>
@@ -154,14 +156,12 @@ function App() {
         <span>
           {token
             ? workspace?.profile?.name || workspace?.name
-            : "For small businesses"}{" "}
-          <span className="header-tag">Fall Release 1</span>
+            : ""}
         </span>
       </header>}
       {config?.rehearsal && (
         <p className="notice">
-          Rehearsal only · Synthetic local data · Simulated sign-in · Paid AI
-          disabled
+          Test environment · Sample data and simulated sign-in
         </p>
       )}
       {shopId ? (
@@ -266,14 +266,15 @@ function App() {
             ))}
           </nav>
             <div className="sidebar-bottom">
-              {workspace && <a className="sidebar-preview" href={"/shop/" + workspace.id} target="_blank" rel="noreferrer">Customer website <Icon name="arrow" /></a>}
               <div className="sidebar-account"><span className="account-avatar">{(workspace?.name || email || "B").slice(0,1).toUpperCase()}</span><span><strong>{workspace?.profile?.name || workspace?.name || "Your business"}</strong><small>{workspace?.role === "owner" ? "Owner workspace" : "Staff workspace"}</small></span></div>
               <button className="signout-button" disabled={busy} onClick={() => { authClient?.auth.signOut(); setToken(""); setTab("Business settings"); setWorkspace(null); setCars([]); setInbox([]); setCar(null); setMessage("Signed out."); }}><Icon name="logout" /> Sign out</button>
-              <small className="release-marker">Workspace 2 · Fall Release 1</small>
             </div>
           </aside>
           <div className="workspace-main">
-            <header className="workspace-topbar"><span>Workspace <span className="breadcrumb-divider">/</span> <strong>{visibleTab}</strong></span><span className="access-label">{workspace?.role === "owner" ? "Owner access" : "Staff access"}</span></header>
+            <header className="workspace-topbar">
+              <strong>{visibleTab}</strong>
+              {workspace && !salon && <a className="button" href={"/shop/" + workspace.id} target="_blank" rel="noreferrer">Open customer site</a>}
+            </header>
             <div className="workspace-content">
               {visibleTab === "Listings" && <div className="dashboard-heading"><div><p className="eyebrow">Your business, at a glance</p><h1>Your front desk</h1></div><div className="workspace-metrics" aria-label="Workspace summary"><span><strong>{cars.filter(c => c.published_revision !== null).length}</strong> Published</span><span><strong>{cars.filter(c => c.published_revision === null).length}</strong> Private drafts</span><span><strong>{inbox.filter(i => i.status === "open").length}</strong> Open inquiries</span></div></div>}
           {message && (
@@ -289,9 +290,6 @@ function App() {
               notify={setMessage}
               businessId={workspace.id}
             />
-          )}
-          {visibleTab === "Showcase" && workspace && (
-            <Showcase api={api} businessId={workspace.id} openKnowledge={() => setTab("Owner knowledge")} />
           )}
           {visibleTab === "Business settings" && workspace && (
             <BusinessSettings
@@ -315,16 +313,6 @@ function App() {
                   </p>
                 </div>
                 <div className="actions">
-                  {workspace && (
-                    <a
-                      className="button"
-                      target="_blank"
-                      rel="noreferrer"
-                      href={"/shop/" + workspace.id}
-                    >
-                      Open customer inventory ↗
-                    </a>
-                  )}
                   <button
                     disabled={busy}
                     onClick={() =>
@@ -558,7 +546,12 @@ function App() {
               )}
             </section>
           )}
-          {visibleTab === "System status" && <SystemStatus api={api} />}
+          {visibleTab === "Request log" && <SystemStatus api={api} />}
+          {workspace?.role === "owner" && visibleTab !== "Request log" && (
+            <footer className="owner-utilities">
+              <button className="text-button" onClick={() => { setTab("Request log"); window.scrollTo(0, 0); }}>Request log</button>
+            </footer>
+          )}
             </div>
           </div>
         </div>
@@ -568,7 +561,7 @@ function App() {
           {message}
         </p>
       )}
-      <footer>FrontDesk AI · Fall Release 1 <span className="release-marker">Workspace 2</span></footer>
+      {!token && <footer>FrontDesk AI</footer>}
     </main>
   );
 }

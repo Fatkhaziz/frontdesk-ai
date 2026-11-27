@@ -36,11 +36,10 @@ export default function SystemStatus({ api }: { api: Api }) {
     <section>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Presentation readiness</p>
-          <h1>System status</h1>
+          <h1>Request log</h1>
         </div>
         <button disabled={busy} onClick={refresh}>
-          {busy ? "Checking…" : "Refresh status"}
+          {busy ? "Checking…" : "Refresh requests"}
         </button>
       </div>
       {failed ? (
@@ -51,6 +50,8 @@ export default function SystemStatus({ api }: { api: Api }) {
       ) : (
         status && (
           <>
+            <details className="saved-summary">
+              <summary>Service and usage details</summary>
             <div className="status-grid">
               {[
                 ["Supabase Auth", status.auth],
@@ -139,26 +140,17 @@ export default function SystemStatus({ api }: { api: Api }) {
                 </p>
               )}
             </div>
-            <details>
-              <summary>Technical API diagnostics</summary>
-              <pre>{JSON.stringify(status, null, 2)}</pre>
-              <a href="/docs" target="_blank" rel="noreferrer">
-                Open API reference
-              </a>
+              <details>
+                <summary>Technical API diagnostics</summary>
+                <pre>{JSON.stringify(status, null, 2)}</pre>
+                <a href="/docs" target="_blank" rel="noreferrer">Open API reference</a>
+              </details>
             </details>
             <div className="evidence-panel">
-              <h2>Latest showcase AI requests</h2>
-              <p className="muted">
-                Actual saved request records. Provider success means xAI
-                returned a completion; application acceptance means our checks
-                passed. Accepted with limits means the AI wording was omitted
-                and a server summary of published facts was delivered. These
-                are separate outcomes.
-              </p>
+              <h2>Recent Grok requests</h2>
               {!runs.length ? (
                 <p>
-                  No showcase requests recorded yet. An empty table does not
-                  prove a live AI call.
+                  No requests recorded for this business.
                 </p>
               ) : (
                 runs.map((r) => (

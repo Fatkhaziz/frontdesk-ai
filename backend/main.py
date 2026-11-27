@@ -19,7 +19,6 @@ from .ai import call_ai, now
 from .demo import fields_for_question
 from .errors import error_category
 from .business import create_router, format_inquiry
-from .showcase_rehearsal import latest_capture, local_showcase_enabled
 
 app = FastAPI(title='FrontDesk AI feasibility demo')
 log = logging.getLogger('frontdesk')
@@ -156,21 +155,14 @@ def serialize(row):
 
 @app.get('/health')
 def health():
-    return {'status':'running', 'showcase_validation_version':7}
+    return {'status':'running', 'showcase_validation_version':8}
 
 @app.get('/api/config')
 def config():
     url, key = supabase_config()
     return {'supabaseUrl':url,'supabaseKey':key,'questionMode':question_mode(),'aiEnabled':ai_enabled(),
             'shoppingAiEnabled':question_mode() == 'ai' and bool(os.getenv('XAI_API_KEY') and os.getenv('XAI_MODEL')),
-            'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1',
-            'localShowcase': local_showcase_enabled()}
-
-@app.get('/api/assistant/saved-rehearsal')
-def saved_rehearsal(member=Depends(owner)):
-    if not local_showcase_enabled():
-        raise HTTPException(404, 'Saved rehearsal is available in the local showcase.')
-    return {'run': latest_capture(member['business_id'])}
+            'rehearsal': os.getenv('TESTING') == '1' and os.getenv('FRONTDESK_REHEARSAL') == '1'}
 
 @app.get('/api/listings')
 def listings(m=Depends(identity)):
@@ -325,7 +317,7 @@ def diagnostics(m=Depends(owner)):
     limit=int(os.getenv('AI_CALL_LIMIT','10'))
     return {'auth':auth,'database':'isolated rehearsal' if rehearsal else 'connected','backend':'running','question_mode':question_mode(),'ai_enabled':ai_enabled(),
             'drafting': 'last request failed' if draft_task and draft_task['status']=='failed' else ('ready' if ai_enabled() and calls<limit else 'unavailable'),
-            'ai_calls_used':calls,'ai_call_limit':limit,'spending':spending,'showcase_validation_version':7,'last_successful_ai_request':dict(success) if success else None,
+            'ai_calls_used':calls,'ai_call_limit':limit,'spending':spending,'showcase_validation_version':8,'last_successful_ai_request':dict(success) if success else None,
             'last_actual_ai_request':dict(last) if last else None, 'last_business_qa_evidence':dict(evidence) if evidence else None}
 
 @app.get('/api/ai/evidence')

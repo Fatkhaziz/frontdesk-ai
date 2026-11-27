@@ -14,11 +14,10 @@ from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
 os.chdir(Path(__file__).resolve().parent.parent)
-os.environ.update(SUPABASE_URL='https://showcase.invalid',SUPABASE_PUBLISHABLE_KEY='sb_publishable_mock',FRONTDESK_LOCAL_SHOWCASE='1')
+os.environ.update(SUPABASE_URL='https://showcase.invalid',SUPABASE_PUBLISHABLE_KEY='sb_publishable_mock')
 from tests.test_shopping import Shopping
 from backend.main import app
 from backend.shopping import Preferences, eligible
-from scripts.acceptance_live import verify
 from playwright.sync_api import sync_playwright, expect
 import uvicorn
 
@@ -32,12 +31,14 @@ def main():
         if server.started:break
         time.sleep(.05)
     assert server.started
+    first_reply=threading.Event()
     def provider(instruction,payload):
         if 'questions' in instruction[:180]:
             return fixture.envelope({'questions':[{'question':'What warranty applies?','reason':'Warranty terms are not in the inventory.','topic':'Warranty'}, {'question':'Is accident history available?','reason':'A history report is not supplied.','topic':'Condition'}]})
         prefs=Preferences.model_validate(payload['preferences'])
         if '25,000' in payload['message']:
             prefs.budget_cents=2500000;prefs.budget_kind='vehicle';prefs.min_seats=5
+            assert first_reply.wait(10), 'The browser did not show the pending message'
         if '30,000' in payload['message']:
             prefs.budget_cents=3000000
         # Mock boundary consumes the same explicitly labeled dollar payload as
@@ -48,15 +49,18 @@ def main():
         source=next(s for s in payload['sources'] if s['listing_id']==lid and s['label'].endswith(' · price'))
         policy=next((s for s in payload['sources'] if not s.get('value_text')),None)
         policy_citation=f" [[{policy['id']}]]" if policy else ''
-        answer=(f"The lower-priced option leaves more of your vehicle budget available. Its listed price is [[{source['id']}]]. Compare seating and mileage before deciding; total costs still need staff confirmation.{policy_citation}"
-                if 'citation recovery' not in payload['message'] else 'UNVERIFIED-PROSE: This warranty is established [[S9999]].')
+        cited=[s['id'] for s in payload['sources'] if s['label'].endswith(' · price') and any(l['id']==s['listing_id'] for l in matches[:2])]
+        answer=[{'text': f"The lower-priced option leaves more of your vehicle budget available. Its listed price is [[{source['id']}]]. Total costs still need staff confirmation.",
+                 'source_ids': cited}]
+        if policy:
+            answer.append({'text': 'Ask staff for the written warranty terms.'+policy_citation, 'source_ids': [policy['id']]})
+        if 'citation recovery' in payload['message']:
+            answer.append({'text':'UNVERIFIED-PROSE: This warranty is established [[S9999]].', 'source_ids':[]})
         return fixture.envelope({'preferences':prefs.model_dump(),'answer':answer,
             'follow_up':'Would you prioritize a lower purchase price or additional passenger space?',
-            'recommended_ids':[l['id'] for l in matches[:2]],'source_ids':[s['id'] for s in payload['sources'] if any(l['id']==s['listing_id'] for l in matches[:2])][:25]})
+            'recommended_ids':[l['id'] for l in matches[:2]],'source_ids':[]})
     try:
-        captures=Path(fixture.tmp.name)/'captures'
-        with patch('backend.showcase_ai.provider_call',side_effect=provider) as grok, \
-             patch('backend.showcase_rehearsal.captures_directory',return_value=captures), sync_playwright() as p:
+        with patch('backend.showcase_ai.provider_call',side_effect=provider) as grok, sync_playwright() as p:
             browser=p.chromium.launch(headless=True,executable_path=os.getenv('FRONTDESK_BROWSER_EXECUTABLE') or None)
             context=browser.new_context(viewport={'width':1440,'height':1000});errors=[]
             page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)))
@@ -79,37 +83,37 @@ def main():
             page.get_by_role('checkbox').check();page.get_by_role('button',name='Publish reviewed knowledge',exact=True).click()
             expect(page.get_by_role('status')).to_contain_text('Reviewed knowledge published')
             page.screenshot(path='/tmp/frontdesk-owner-knowledge.png',full_page=True)
-            assert verify('a',captures/'20261127T020000Z')
             calls=grok.call_count
-            page.get_by_role('button',name='Showcase',exact=True).click()
-            expect(page.get_by_role('heading',name='Dealership showcase',exact=True)).to_be_visible()
-            expect(page.get_by_text('Accepted Grok reply',exact=True)).to_have_count(3)
-            expect(page.get_by_text('lower-priced option',exact=False)).to_have_count(3)
-            page.screenshot(path='/tmp/frontdesk-saved-grok-responses.png',full_page=True)
-            with context.expect_page() as fit_tab:
-                page.get_by_role('link',name='Open Find my fit',exact=True).click()
-            expect(fit_tab.value.get_by_label('Your message')).to_be_visible()
-            fit_tab.value.close()
+            expect(page.get_by_role('navigation',name='Dashboard sections')).not_to_contain_text('Request log')
+            expect(page.get_by_role('navigation',name='Dashboard sections')).not_to_contain_text('Showcase')
             with context.expect_page() as faq_tab:
                 page.get_by_role('link',name='See published answers',exact=True).click()
             faq=faq_tab.value
-            expect(faq.get_by_role('heading',name='Owner-approved questions and answers')).to_be_visible()
+            expect(faq.get_by_role('heading',name='Common questions')).to_be_visible()
             faq.get_by_text('What warranty applies?',exact=True).click()
             expect(faq.get_by_text('Ask staff for the written warranty terms before purchase.',exact=True)).to_be_visible()
             faq.get_by_text('Is accident history available?',exact=True).click()
             expect(faq.get_by_text('Staff can confirm this.',exact=False)).to_be_visible()
             faq.close()
-            assert grok.call_count==calls, 'Opening showcase pages unexpectedly requested inference'
-            shop=context.new_page();shop.on('pageerror',lambda e:errors.append(str(e)));shop.goto('http://127.0.0.1:8003/shop/a')
+            with context.expect_page() as customer_tab:
+                page.get_by_role('link',name='Open customer site',exact=True).click()
+            shop=customer_tab.value
+            shop.on('pageerror',lambda e:errors.append(str(e)))
+            comparison_requests=[]
+            shop.on('request', lambda request: comparison_requests.append(request) if request.url.endswith('/compare') else None)
             expect(shop.get_by_role('heading',name='Published inventory',exact=True)).to_be_visible()
             shop.screenshot(path='/tmp/frontdesk-shopping-inventory.png',full_page=True)
             shop.get_by_label('Compare this vehicle').first.check();shop.get_by_label('Compare this vehicle').nth(1).check()
             shop.get_by_role('button',name='Compare selected (2)',exact=True).click()
             expect(shop.get_by_text('Listed price difference: $3,000.00.',exact=False)).to_be_visible()
             expect(shop.get_by_role('table')).to_contain_text('Not provided')
-            shop.get_by_role('button',name='Find my fit',exact=True).click()
+            shop.get_by_role('button',name='AI chat',exact=True).click()
+            assert grok.call_count==calls, 'Opening the customer features unexpectedly requested inference'
             shop.get_by_label('Your message').fill('My vehicle budget is $25,000 and I need 5 seats for commuting.')
             shop.get_by_role('button',name='Send to AI',exact=True).click()
+            expect(shop.get_by_role('log')).to_contain_text('My vehicle budget is $25,000')
+            expect(shop.get_by_role('status')).to_contain_text('Thinking')
+            first_reply.set()
             expect(shop.get_by_role('log')).to_contain_text('lower-priced option')
             expect(shop.get_by_label('Maximum budget (USD)')).to_have_value('25000')
             expect(shop.get_by_label('Minimum seats')).to_have_value('5')
@@ -119,12 +123,13 @@ def main():
             shop.screenshot(path='/tmp/frontdesk-shopping-fit.png',full_page=True)
             shop.get_by_role('button',name='Compare',exact=False).filter(has=shop.locator('.count')).click()
             shop.get_by_role('button',name='Refresh comparison',exact=True).click()
-            shop.get_by_role('button',name='Explain this comparison with AI',exact=True).click()
-            expect(shop.locator('.bubble.assistant')).to_have_count(3)
-            expect(shop.get_by_role('status')).to_contain_text('Answer received from live AI')
             expect(shop.get_by_text('Listed price difference: $3,000.00.',exact=False)).to_be_visible()
             shop.evaluate('window.scrollTo(0,0)')
             shop.screenshot(path='/tmp/frontdesk-shopping-comparison.png',full_page=True)
+            compare_count=len(comparison_requests)
+            shop.get_by_role('button',name='Explain this comparison with AI',exact=True).click()
+            expect(shop.locator('.bubble.assistant > strong')).to_have_count(3)
+            assert len(comparison_requests)==compare_count, 'Chat waited for an unnecessary comparison request'
             shop.get_by_role('button',name='Ask staff to follow up',exact=True).click()
             shop.get_by_label('Your question or summary').fill('Please confirm warranty and accident history for these vehicles.')
             shop.get_by_label('Email or phone for follow-up').fill('class-test@example.invalid')
@@ -137,16 +142,15 @@ def main():
             expect(page.get_by_role('status')).to_contain_text('Inquiry status saved')
             page.get_by_text('Customer requirements and selected vehicles',exact=True).click()
             expect(page.get_by_text('$30,000.00',exact=True)).to_be_visible()
-            page.get_by_role('button',name='System status',exact=True).click()
-            expect(page.get_by_role('heading',name='Latest showcase AI requests')).to_be_visible()
+            page.get_by_role('button',name='Request log',exact=True).click()
+            expect(page.get_by_role('heading',name='Recent Grok requests')).to_be_visible()
             expect(page.get_by_text('mock-completion-123',exact=True).first).to_be_visible()
             shop.get_by_label('Your message').fill('Check citation recovery for these selected vehicles.')
             shop.get_by_role('button',name='Send to AI',exact=True).click()
-            expect(shop.get_by_role('status')).to_contain_text('Showing confirmed listing details instead')
-            expect(shop.get_by_role('log')).to_contain_text('Confirmed listing summary')
+            expect(shop.get_by_role('log')).to_contain_text('Some details could not be verified')
             expect(shop.get_by_role('log')).not_to_contain_text('UNVERIFIED-PROSE')
             expect(shop.get_by_role('log')).not_to_contain_text('$99,999')
-            page.get_by_role('button',name='Refresh status',exact=True).click()
+            page.get_by_role('button',name='Refresh requests',exact=True).click()
             expect(page.get_by_text('accepted_with_limits',exact=True).first).to_be_visible()
             expect(page.get_by_text('AI wording omitted at sources: unapproved_source · field answer',exact=True)).to_be_visible()
             page.screenshot(path='/tmp/frontdesk-showcase-evidence.png',full_page=True)
@@ -155,9 +159,10 @@ def main():
             shop.get_by_role('button',name='Inventory',exact=True).click()
             assert shop.evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile inventory overflow'
             assert not errors,errors
-            print('PASS: rendered owner questions/publication, inventory/comparison, approved policy citations and source-rendered AI explanation, multi-turn preferences, limited summary omitting bad inline sources, consented inquiry, correlated evidence and mobile layout. Auth and provider completions were mocked; no paid calls.')
+            print('PASS: rendered owner suggestions/publication, FAQs, inventory/comparison, pending and delivered chat turns, continued preferences, retained valid prose, staff inquiry, request log and mobile layout. Auth and provider completions were simulated.')
             browser.close()
     finally:
+        first_reply.set()
         server.should_exit=True;thread.join(timeout=5);fixture.tearDown()
 
 

@@ -98,7 +98,7 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
         if not still_current():
             raise Rejection(stage, 'stale_source')
         application = 'accepted'
-        if result.get('answer_mode') == 'grounded_summary':
+        if result.get('answer_mode') == 'partial_ai_explanation':
             saved = result['validation_rejection']
             diagnostic = Rejection(saved['stage'], saved['reason'], saved.get('field'), saved.get('source_id')).diagnostic(sources)
             application = 'accepted_with_limits'
@@ -117,7 +117,11 @@ def run_ai(business, operation, request_id, sources, instruction, payload, valid
             diagnostic = Rejection(stage, 'provider_error' if stage == 'provider' else 'internal_error').diagnostic(sources)
         if application == 'stale_source':
             raise HTTPException(409, 'Published information changed during the request. Refresh the inventory before trying again.') from None
-        raise HTTPException(503, 'The AI response could not be accepted. No facts were changed. You can compare the published facts or contact staff.') from None
+        if provider == 'failed':
+            detail = 'The AI service could not finish this request. You can compare listings or contact staff.'
+        else:
+            detail = 'We couldn’t verify a reply to this message. You can compare listings or contact staff.'
+        raise HTTPException(503, detail) from None
     finally:
         elapsed = int((time.monotonic() - started) * 1000)
         with connect() as c:
